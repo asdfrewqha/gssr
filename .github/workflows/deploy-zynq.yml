@@ -33,6 +33,7 @@ jobs:
           host:             ${{ matrix.node.host }}
           username:         deploy
           key:              ${{ secrets.ZYNQ_SSH_KEY }}
+          port:             1337
           source:           infra/compose/docker-compose.zynq.yml
           target:           /opt/gssr/
           strip_components: 2   # strips infra/compose/ → file lands at /opt/gssr/docker-compose.zynq.yml
@@ -54,6 +55,7 @@ jobs:
           host:     ${{ matrix.node.host }}
           username: deploy
           key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          port:     1337
           envs:     DOCKERHUB_USERNAME,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,ZYNQ_POSTGRES_URL,ZYNQ_VALKEY_URL,DOMAIN
           script: |
             set -e
@@ -99,6 +101,7 @@ jobs:
           host:     ${{ matrix.node.host }}
           username: deploy
           key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          port:     1337
           source:   services/game/dist/game-server-arm
           target:   /opt/gssr/
           strip_components: 3   # strips services/game/dist/
@@ -117,6 +120,7 @@ jobs:
           host:     ${{ matrix.node.host }}
           username: deploy
           key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          port:     1337
           envs:     JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,ZYNQ_POSTGRES_URL,ZYNQ_VALKEY_URL,DOMAIN
           script: |
             set -e
