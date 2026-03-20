@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-config
+  namespace: gssr
+data:
+  PORT: "3000"
+  METRICS_PORT: "2112"
+  JWT_ACCESS_TTL: "15m"
+  JWT_REFRESH_TTL: "168h"
+  # Override at deploy time or via secret:
+  # POSTGRES_URL, VALKEY_URL, JWT_SECRET, LIVEKIT_* → in game-secrets

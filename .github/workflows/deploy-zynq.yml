@@ -1,0 +1,143 @@
+name: Deploy to Zynq Nodes
+
+# Triggered after game service build succeeds on main.
+# Strategy: SCP the compose file, then SSH to write .env and restart the container.
+# Bare binary fallback if Docker is unavailable on a node.
+
+on:
+  workflow_run:
+    workflows: ["Build Game Service"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - host: ${{ secrets.ZYNQ1_HOST }}
+          - host: ${{ secrets.ZYNQ2_HOST }}
+          - host: ${{ secrets.ZYNQ3_HOST }}
+          - host: ${{ secrets.ZYNQ4_HOST }}
+          - host: ${{ secrets.ZYNQ5_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── 1. Copy compose file to Zynq ─────────────────────────────────────
+      - name: Upload compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:             ${{ matrix.node.host }}
+          username:         deploy
+          key:              ${{ secrets.ZYNQ_SSH_KEY }}
+          source:           infra/compose/docker-compose.zynq.yml
+          target:           /opt/gssr/
+          strip_components: 2   # strips infra/compose/ → file lands at /opt/gssr/docker-compose.zynq.yml
+
+      # ── 2. Write .env + pull + restart (Docker preferred) ────────────────
+      - name: Deploy via Docker
+        id: docker_deploy
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          JWT_SECRET:         ${{ secrets.JWT_SECRET }}
+          LIVEKIT_API_KEY:    ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          ZYNQ_POSTGRES_URL:  ${{ secrets.ZYNQ_POSTGRES_URL }}
+          ZYNQ_VALKEY_URL:    ${{ secrets.ZYNQ_VALKEY_URL }}
+          DOMAIN:             ${{ vars.DOMAIN }}
+        with:
+          host:     ${{ matrix.node.host }}
+          username: deploy
+          key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          envs:     DOCKERHUB_USERNAME,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,ZYNQ_POSTGRES_URL,ZYNQ_VALKEY_URL,DOMAIN
+          script: |
+            set -e
+            mkdir -p /opt/gssr
+            cd /opt/gssr
+
+            # Write .env (game service reads env_file: .env relative to compose file)
+            {
+              printf 'DOCKERHUB_USERNAME=%s\n'  "${DOCKERHUB_USERNAME}"
+              printf 'PORT=3000\n'
+              printf 'METRICS_PORT=2112\n'
+              printf 'POSTGRES_URL=%s\n'        "${ZYNQ_POSTGRES_URL}"
+              printf 'VALKEY_URL=%s\n'          "${ZYNQ_VALKEY_URL}"
+              printf 'JWT_SECRET=%s\n'          "${JWT_SECRET}"
+              printf 'JWT_ACCESS_TTL=15m\n'
+              printf 'JWT_REFRESH_TTL=168h\n'
+              printf 'LIVEKIT_URL=ws://livekit:7880\n'
+              printf 'LIVEKIT_API_KEY=%s\n'     "${LIVEKIT_API_KEY}"
+              printf 'LIVEKIT_API_SECRET=%s\n'  "${LIVEKIT_API_SECRET}"
+              printf 'CORS_ORIGINS=https://%s\n' "${DOMAIN}"
+            } > .env
+
+            docker compose -f docker-compose.zynq.yml pull game
+            docker compose -f docker-compose.zynq.yml up -d --no-build game
+            echo "Zynq Docker deploy complete"
+
+      # ── Bare binary fallback (if Docker unavailable on this node) ─────────
+      - name: Build ARM binary
+        if: steps.docker_deploy.outcome == 'failure'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Compile ARM binary
+        if: steps.docker_deploy.outcome == 'failure'
+        working-directory: services/game
+        run: make build-arm
+
+      - name: Upload binary
+        if: steps.docker_deploy.outcome == 'failure'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ matrix.node.host }}
+          username: deploy
+          key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          source:   services/game/dist/game-server-arm
+          target:   /opt/gssr/
+          strip_components: 3   # strips services/game/dist/
+
+      - name: Write .env + restart systemd
+        if: steps.docker_deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1
+        env:
+          JWT_SECRET:         ${{ secrets.JWT_SECRET }}
+          LIVEKIT_API_KEY:    ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          ZYNQ_POSTGRES_URL:  ${{ secrets.ZYNQ_POSTGRES_URL }}
+          ZYNQ_VALKEY_URL:    ${{ secrets.ZYNQ_VALKEY_URL }}
+          DOMAIN:             ${{ vars.DOMAIN }}
+        with:
+          host:     ${{ matrix.node.host }}
+          username: deploy
+          key:      ${{ secrets.ZYNQ_SSH_KEY }}
+          envs:     JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,ZYNQ_POSTGRES_URL,ZYNQ_VALKEY_URL,DOMAIN
+          script: |
+            set -e
+            cd /opt/gssr
+            chmod +x game-server-arm
+            mv game-server-arm game-server
+
+            # Write /etc/gssr-game.env for systemd EnvironmentFile=
+            {
+              printf 'PORT=3000\n'
+              printf 'METRICS_PORT=2112\n'
+              printf 'POSTGRES_URL=%s\n'        "${ZYNQ_POSTGRES_URL}"
+              printf 'VALKEY_URL=%s\n'          "${ZYNQ_VALKEY_URL}"
+              printf 'JWT_SECRET=%s\n'          "${JWT_SECRET}"
+              printf 'JWT_ACCESS_TTL=15m\n'
+              printf 'JWT_REFRESH_TTL=168h\n'
+              printf 'LIVEKIT_URL=ws://livekit:7880\n'
+              printf 'LIVEKIT_API_KEY=%s\n'     "${LIVEKIT_API_KEY}"
+              printf 'LIVEKIT_API_SECRET=%s\n'  "${LIVEKIT_API_SECRET}"
+              printf 'CORS_ORIGINS=https://%s\n' "${DOMAIN}"
+            } | sudo tee /etc/gssr-game.env > /dev/null
+
+            sudo systemctl restart gssr-game
+            echo "Zynq bare binary deploy complete"

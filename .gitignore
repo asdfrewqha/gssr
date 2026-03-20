@@ -1,0 +1,40 @@
+# Env files with secrets (commit only .env.example, never .env)
+.env
+.env.local
+*.env.local
+services/game/.env
+services/workers/.env
+frontend/.env
+admin/.env
+infra/compose/.env
+
+# LiveKit config — written by CI deploy script, contains API keys
+infra/compose/livekit.yaml
+
+# Go
+services/game/dist/
+services/game/coverage.out
+
+# Python
+services/workers/__pycache__/
+services/workers/**/__pycache__/
+services/workers/.pytest_cache/
+services/workers/.coverage
+services/workers/models/     # NSFW model binary (~50MB)
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+admin/node_modules/
+admin/dist/
+
+# Cloudflare tunnel credentials (contains private key)
+infra/cloudflare/credentials.json
+
+# k3s kubeconfig
+*.kubeconfig
+
+# OS
+.DS_Store
+Thumbs.db

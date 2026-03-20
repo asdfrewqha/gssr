@@ -1,0 +1,29 @@
+# Replace <TUNNEL_ID> and <DOMAIN> with your values.
+# Get TUNNEL_ID from: Cloudflare Zero Trust → Networks → Tunnels
+# credentials-file is auto-created by cloudflared on first auth.
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cf/credentials.json
+
+ingress:
+  # Public — game API, WebSocket, LiveKit (no Access protection)
+  - hostname: game.<DOMAIN>
+    service: http://nginx:80
+
+  # Protected by Cloudflare Access
+  - hostname: admin.<DOMAIN>
+    service: http://nginx:80
+
+  - hostname: s3.<DOMAIN>
+    service: http://minio:9001
+
+  - hostname: grafana.<DOMAIN>
+    service: http://grafana:3000
+
+  - hostname: mq.<DOMAIN>
+    service: http://rabbitmq:15672
+
+  - hostname: portainer.<DOMAIN>
+    service: http://portainer:9000
+
+  - service: http_status:404

@@ -1,0 +1,31 @@
+name: Deploy Admin Panel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "admin/**"
+      - ".github/workflows/deploy-admin.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - name: Install and build
+        working-directory: admin
+        run: npm ci && npm run build
+        env:
+          VITE_ADMIN_API_URL: ${{ vars.VITE_ADMIN_API_URL }}
+          VITE_MINIO_URL: ${{ vars.VITE_MINIO_URL }}
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy admin/dist --project-name=gssr-admin

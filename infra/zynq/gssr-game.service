@@ -1,0 +1,17 @@
+[Unit]
+Description=GSSR Game Engine
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/gssr
+EnvironmentFile=/opt/gssr/.env.zynq
+ExecStart=/opt/gssr/game-server
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
