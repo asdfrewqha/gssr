@@ -1,0 +1,140 @@
+basePath: /api
+definitions:
+  auth.authResponse:
+    properties:
+      expires_in:
+        example: 900
+        type: integer
+      user_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  auth.errorResponse:
+    properties:
+      error:
+        example: invalid credentials
+        type: string
+    type: object
+  auth.loginRequest:
+    properties:
+      password:
+        example: s3cr3tP@ss
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
+  auth.registerRequest:
+    properties:
+      password:
+        example: s3cr3tP@ss
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
+host: localhost:3000
+info:
+  contact: {}
+  description: GeoGuessr School Edition – game service
+  title: GSSR Game API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: Authenticate and receive tokens as cookies
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      security:
+      - CookieAuth: []
+      summary: Revoke tokens and clear cookies
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: Rotate tokens using the refresh_token cookie
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: Register a new user
+      tags:
+      - auth
+schemes:
+- http
+securityDefinitions:
+  CookieAuth:
+    in: cookie
+    name: access_token
+    type: apiKey
+swagger: "2.0"

@@ -1,4 +1,7 @@
-.PHONY: build build-arm build-amd64 test test-coverage docker-build
+.PHONY: build build-arm build-amd64 test test-coverage docker-build swagger
+
+swagger:
+	swag init -g cmd/server/main.go -o docs
 
 build:
 	go build ./...

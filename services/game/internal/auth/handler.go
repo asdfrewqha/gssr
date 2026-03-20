@@ -14,6 +14,27 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// swagger request/response types
+
+type registerRequest struct {
+	Username string `json:"username" example:"alice"`
+	Password string `json:"password" example:"s3cr3tP@ss"`
+}
+
+type loginRequest struct {
+	Username string `json:"username" example:"alice"`
+	Password string `json:"password" example:"s3cr3tP@ss"`
+}
+
+type authResponse struct {
+	UserID    string `json:"user_id"    example:"550e8400-e29b-41d4-a716-446655440000"`
+	ExpiresIn int    `json:"expires_in" example:"900"`
+}
+
+type errorResponse struct {
+	Error string `json:"error" example:"invalid credentials"`
+}
+
 type Handler struct {
 	cfg   *config.Config
 	pg    *db.Postgres
@@ -24,6 +45,16 @@ func NewHandler(cfg *config.Config, pg *db.Postgres, cache *db.Valkey) *Handler 
 	return &Handler{cfg: cfg, pg: pg, cache: cache}
 }
 
+// Register godoc
+// @Summary      Register a new user
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      registerRequest  true  "credentials"
+// @Success      201   {object}  map[string]string
+// @Failure      400   {object}  errorResponse
+// @Failure      409   {object}  errorResponse
+// @Router       /auth/register [post]
 func (h *Handler) Register(c *fiber.Ctx) error {
 	var body struct {
 		Username string `json:"username"`
@@ -56,6 +87,16 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": userID, "username": body.Username})
 }
 
+// Login godoc
+// @Summary      Authenticate and receive tokens as cookies
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      loginRequest  true  "credentials"
+// @Success      200   {object}  authResponse
+// @Failure      400   {object}  errorResponse
+// @Failure      401   {object}  errorResponse
+// @Router       /auth/login [post]
 func (h *Handler) Login(c *fiber.Ctx) error {
 	var body struct {
 		Username string `json:"username"`
@@ -85,6 +126,13 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 	return h.issueTokens(c, userID, isAdmin)
 }
 
+// Refresh godoc
+// @Summary      Rotate tokens using the refresh_token cookie
+// @Tags         auth
+// @Produce      json
+// @Success      200  {object}  authResponse
+// @Failure      401  {object}  errorResponse
+// @Router       /auth/refresh [post]
 func (h *Handler) Refresh(c *fiber.Ctx) error {
 	refreshToken := c.Cookies("refresh_token")
 	if refreshToken == "" {
@@ -105,6 +153,13 @@ func (h *Handler) Refresh(c *fiber.Ctx) error {
 	return h.issueTokens(c, claims.UserID.String(), claims.IsAdmin)
 }
 
+// Logout godoc
+// @Summary      Revoke tokens and clear cookies
+// @Tags         auth
+// @Security     CookieAuth
+// @Success      204
+// @Failure      401  {object}  errorResponse
+// @Router       /auth/logout [post]
 func (h *Handler) Logout(c *fiber.Ctx) error {
 	userID := UserID(c)
 	h.cache.Client.Del(context.Background(), fmt.Sprintf("refresh:%s", userID))

@@ -1,3 +1,14 @@
+// @title           GSSR Game API
+// @version         1.0
+// @description     GeoGuessr School Edition – game service
+// @host            localhost:3000
+// @BasePath        /api
+// @schemes         http
+
+// @securityDefinitions.apikey  CookieAuth
+// @in                          cookie
+// @name                        access_token
+
 package main
 
 import (
@@ -12,10 +23,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	swagger "github.com/gofiber/swagger"
 	"github.com/gssr/game/internal/auth"
 	"github.com/gssr/game/internal/config"
 	"github.com/gssr/game/internal/db"
 	"github.com/gssr/game/internal/ws"
+	_ "github.com/gssr/game/docs"
 )
 
 func main() {
@@ -52,6 +65,9 @@ func main() {
 	prom := fiberprometheus.New("gssr_game")
 	prom.RegisterAt(app, "/metrics")
 	app.Use(prom.Middleware)
+
+	// Swagger UI (local only)
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// Health
 	app.Get("/health", func(c *fiber.Ctx) error {
