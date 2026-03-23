@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str
+    workers_database_url: str
     valkey_url: str = "redis://localhost:6379"
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
 
