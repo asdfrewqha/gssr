@@ -44,15 +44,17 @@ jobs:
           LIVEKIT_API_SECRET:  ${{ secrets.LIVEKIT_API_SECRET }}
           GRAFANA_PASSWORD:    ${{ secrets.GRAFANA_PASSWORD }}
           DOCKERHUB_USERNAME:  ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN:     ${{ secrets.DOCKERHUB_TOKEN }}
           DOMAIN:              ${{ vars.DOMAIN }}
         with:
           host:     ${{ secrets.MAINPC_SSH_HOST }}
           username: deploy
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     1337
-          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOMAIN
+          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN
           script: |
             set -e
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
             mkdir -p /opt/gssr
             tar -xzf /tmp/deploy.tar.gz -C /opt/gssr
             rm -f /tmp/deploy.tar.gz

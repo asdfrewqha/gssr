@@ -8,6 +8,7 @@ on:
       - ".github/workflows/build-game.yml"
     tags:
       - "game/v*"
+  workflow_dispatch:
 
 jobs:
   build:
