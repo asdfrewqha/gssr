@@ -88,9 +88,9 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --config /etc/cf/config.yml run
-    volumes:
-      - ../cloudflare:/etc/cf:ro
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
     depends_on:
       - nginx
 
