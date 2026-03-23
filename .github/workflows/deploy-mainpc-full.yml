@@ -53,7 +53,7 @@ jobs:
             set -e
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
             mkdir -p /opt/gssr
-            tar -xzf ~/deploy.tar.gz -C /opt/gssr
+            tar -xzf ~/deploy.tar.gz -C /opt/gssr --overwrite --no-same-owner
             rm -f ~/deploy.tar.gz
             cd /opt/gssr
 
