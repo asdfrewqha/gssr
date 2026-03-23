@@ -1,0 +1,108 @@
+name: Full Stack Deploy (Main PC)
+
+# Brings up ALL services on the main PC.
+# Use on first setup or after infra config changes (nginx, prometheus, etc.)
+# Rolling workers/celery updates use deploy-mainpc.yml instead.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create deploy archive
+        run: git archive HEAD infra/ migrations/ -o deploy.tar.gz
+
+      - name: Upload archive
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.MAINPC_SSH_HOST }}
+          username: deploy
+          key:      ${{ secrets.MAINPC_SSH_KEY }}
+          port:     1337
+          source:   deploy.tar.gz
+          target:   /home/deploy/
+
+      - name: Deploy full stack
+        uses: appleboy/ssh-action@v1
+        env:
+          POSTGRES_PASSWORD:   ${{ secrets.POSTGRES_PASSWORD }}
+          RABBITMQ_PASS:       ${{ secrets.RABBITMQ_PASS }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          JWT_SECRET:          ${{ secrets.JWT_SECRET }}
+          LIVEKIT_API_KEY:     ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET:  ${{ secrets.LIVEKIT_API_SECRET }}
+          GRAFANA_PASSWORD:    ${{ secrets.GRAFANA_PASSWORD }}
+          DOCKERHUB_USERNAME:  ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN:     ${{ secrets.DOCKERHUB_TOKEN }}
+          DOMAIN:              ${{ vars.DOMAIN }}
+        with:
+          host:     ${{ secrets.MAINPC_SSH_HOST }}
+          username: deploy
+          key:      ${{ secrets.MAINPC_SSH_KEY }}
+          port:     1337
+          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN
+          script: |
+            set -e
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            mkdir -p /opt/gssr
+            tar -xzf ~/deploy.tar.gz -C /opt/gssr
+            rm -f ~/deploy.tar.gz
+            cd /opt/gssr
+
+            {
+              printf 'POSTGRES_USER=gssr\n'
+              printf 'POSTGRES_PASSWORD=%s\n'      "${POSTGRES_PASSWORD}"
+              printf 'POSTGRES_DB=gssr\n'
+              printf 'DATABASE_URL=postgres://gssr:%s@postgres:5432/gssr?sslmode=disable\n' "${POSTGRES_PASSWORD}"
+              printf 'VALKEY_URL=redis://valkey:6379\n'
+              printf 'RABBITMQ_USER=gssr\n'
+              printf 'RABBITMQ_PASS=%s\n'          "${RABBITMQ_PASS}"
+              printf 'RABBITMQ_URL=amqp://gssr:%s@rabbitmq:5672/\n' "${RABBITMQ_PASS}"
+              printf 'MINIO_ROOT_USER=gssr\n'
+              printf 'MINIO_ROOT_PASSWORD=%s\n'    "${MINIO_ROOT_PASSWORD}"
+              printf 'MINIO_ACCESS_KEY=gssr\n'
+              printf 'MINIO_SECRET_KEY=%s\n'       "${MINIO_ROOT_PASSWORD}"
+              printf 'MINIO_ENDPOINT=minio:9000\n'
+              printf 'MINIO_BUCKET=gssr\n'
+              printf 'POSTGRES_URL=postgres://gssr:%s@postgres:5432/gssr?sslmode=disable\n' "${POSTGRES_PASSWORD}"
+              printf 'JWT_SECRET=%s\n'             "${JWT_SECRET}"
+              printf 'JWT_ACCESS_TTL=15m\n'
+              printf 'JWT_REFRESH_TTL=168h\n'
+              printf 'WORKERS_DATABASE_URL=postgresql+asyncpg://gssr:%s@postgres:5432/gssr\n' "${POSTGRES_PASSWORD}"
+              printf 'ADMIN_JWT_SECRET=%s\n'       "${JWT_SECRET}"
+              printf 'CORS_ORIGINS=https://%s\n'  "${DOMAIN}"
+              printf 'ADMIN_CORS_ORIGINS=https://admin.%s\n' "${DOMAIN}"
+              printf 'NSFW_MODEL_PATH=/app/models/nsfw.onnx\n'
+              printf 'NSFW_THRESHOLD=0.7\n'
+              printf 'LIVEKIT_URL=ws://livekit:7880\n'
+              printf 'LIVEKIT_API_KEY=%s\n'        "${LIVEKIT_API_KEY}"
+              printf 'LIVEKIT_API_SECRET=%s\n'     "${LIVEKIT_API_SECRET}"
+              printf 'GRAFANA_PASSWORD=%s\n'       "${GRAFANA_PASSWORD}"
+              printf 'DOMAIN=%s\n'                 "${DOMAIN}"
+              printf 'DOCKERHUB_USERNAME=%s\n'     "${DOCKERHUB_USERNAME}"
+            } > infra/compose/.env
+
+            printf 'port: 7880\nrtc:\n  port_range_start: 50000\n  port_range_end: 60000\n  tcp_port: 7881\nkeys:\n  %s: %s\nlogging:\n  level: info\n' \
+              "${LIVEKIT_API_KEY}" "${LIVEKIT_API_SECRET}" \
+              > infra/compose/livekit.yaml
+
+            docker compose -f infra/compose/docker-compose.mainpc.yml pull
+            docker compose -f infra/compose/docker-compose.mainpc.yml up -d --force-recreate
+
+            # Run database migrations
+            docker run --rm \
+              --network gssr_default \
+              -v "$(pwd)/migrations:/migrations" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              golang:1.22-alpine \
+              sh -c 'go install github.com/pressly/goose/v3/cmd/goose@v3.20.0 && goose -dir /migrations postgres "postgres://gssr:${POSTGRES_PASSWORD}@postgres:5432/gssr?sslmode=disable" up'
+
+            echo "Full stack deploy complete"
