@@ -19,7 +19,7 @@ jobs:
 
       # ── 1. Pack repo into a tarball (excludes .git and gitignored files) ─
       - name: Create deploy archive
-        run: git archive HEAD infra/compose/ migrations/ -o deploy.tar.gz
+        run: git archive HEAD infra/ migrations/ -o deploy.tar.gz
 
       # ── 2. Upload archive to Main PC ─────────────────────────────────────
       - name: Upload archive
