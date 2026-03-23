@@ -30,8 +30,7 @@ jobs:
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     1337
           source:   deploy.tar.gz
-          target:   ~/
-          strip_components: 2
+          target:   /home/deploy/
 
       # ── 3. Extract + write config files + deploy ─────────────────────────
       - name: Deploy
