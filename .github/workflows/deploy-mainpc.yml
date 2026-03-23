@@ -73,6 +73,8 @@ jobs:
               printf 'RABBITMQ_URL=amqp://gssr:%s@rabbitmq:5672/\n' "${RABBITMQ_PASS}"
               printf 'MINIO_ROOT_USER=gssr\n'
               printf 'MINIO_ROOT_PASSWORD=%s\n'    "${MINIO_ROOT_PASSWORD}"
+              printf 'MINIO_ACCESS_KEY=gssr\n'
+              printf 'MINIO_SECRET_KEY=%s\n'      "${MINIO_ROOT_PASSWORD}"
               printf 'MINIO_ENDPOINT=minio:9000\n'
               printf 'MINIO_BUCKET=gssr\n'
               printf 'POSTGRES_URL=postgres://gssr:%s@postgres:5432/gssr?sslmode=disable\n' "${POSTGRES_PASSWORD}"
