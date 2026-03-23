@@ -105,7 +105,7 @@ jobs:
             docker compose -f infra/compose/docker-compose.mainpc.yml pull workers celery
 
             docker compose -f infra/compose/docker-compose.mainpc.yml \
-              up -d --no-build workers celery
+              up -d --no-build --force-recreate workers celery
 
             # Run database migrations (golang:alpine avoids ghcr.io auth issues)
             docker run --rm \
