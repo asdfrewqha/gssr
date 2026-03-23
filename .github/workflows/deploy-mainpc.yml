@@ -19,7 +19,7 @@ jobs:
 
       # ── 1. Pack repo into a tarball (excludes .git and gitignored files) ─
       - name: Create deploy archive
-        run: git archive HEAD -o deploy.tar.gz
+        run: git archive HEAD infra/compose/ migrations/ -o deploy.tar.gz
 
       # ── 2. Upload archive to Main PC ─────────────────────────────────────
       - name: Upload archive
@@ -30,7 +30,8 @@ jobs:
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     1337
           source:   deploy.tar.gz
-          target:   /tmp/
+          target:   ~/
+          strip_components: 2
 
       # ── 3. Extract + write config files + deploy ─────────────────────────
       - name: Deploy
@@ -56,8 +57,8 @@ jobs:
             set -e
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
             mkdir -p /opt/gssr
-            tar -xzf /tmp/deploy.tar.gz -C /opt/gssr
-            rm -f /tmp/deploy.tar.gz
+            tar -xzf ~/deploy.tar.gz -C /opt/gssr
+            rm -f ~/deploy.tar.gz
             cd /opt/gssr
 
             # Write infra/compose/.env from secrets.
