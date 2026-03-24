@@ -31,8 +31,6 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    ports:
-      - "127.0.0.1:15672:15672"
 
   minio:
     image: minio/minio:latest
@@ -43,8 +41,6 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    ports:
-      - "127.0.0.1:9001:9001"
 
   workers:
     image: ${DOCKERHUB_USERNAME}/gssr-workers:latest
@@ -84,11 +80,16 @@ services:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/upstream.conf:/etc/nginx/conf.d/upstream.conf:ro
       - ../nginx/proxy_params.conf:/etc/nginx/conf.d/proxy_params.conf:ro
+      - ../nginx/ssl:/etc/nginx/ssl:ro
     ports:
-      - "127.0.0.1:80:80"
+      - "80:80"
+      - "443:443"
     depends_on:
       - workers
       - minio
+      - grafana
+      - portainer
+      - rabbitmq
 
   portainer:
     image: portainer/portainer-ce:latest
@@ -96,8 +97,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
-    ports:
-      - "127.0.0.1:9000:9000"
 
   # --- Monitoring ---
 
@@ -121,8 +120,6 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "127.0.0.1:3000:3000"
     depends_on:
       - prometheus
       - loki
