@@ -31,6 +31,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:15672:15672"
 
   minio:
     image: minio/minio:latest
@@ -41,6 +43,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
+    ports:
+      - "127.0.0.1:9001:9001"
 
   workers:
     image: ${DOCKERHUB_USERNAME}/gssr-workers:latest
@@ -87,16 +91,19 @@ services:
     depends_on:
       - workers
       - minio
-      - grafana
-      - portainer
-      - rabbitmq
 
+  # Admin panels — localhost only, access via SSH tunnel:
+  #   ssh -L 3001:localhost:3001 -L 9001:localhost:9001 \
+  #       -L 15672:localhost:15672 -L 9002:localhost:9002 \
+  #       -p 1337 deploy@<server-ip>
   portainer:
     image: portainer/portainer-ce:latest
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    ports:
+      - "127.0.0.1:9002:9000"
 
   # --- Monitoring ---
 
@@ -115,11 +122,13 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      GF_SERVER_ROOT_URL: http://localhost:3001
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3001:3000"
     depends_on:
       - prometheus
       - loki
