@@ -93,9 +93,10 @@ jobs:
             } > infra/compose/.env
 
             # Write Cloudflare Origin Certificate for nginx SSL
+            # Secrets are stored as base64 to survive SSH transport (PEM has newlines)
             mkdir -p infra/nginx/ssl
-            printf '%s\n' "${ORIGIN_CERT}" > infra/nginx/ssl/origin.pem
-            printf '%s\n' "${ORIGIN_KEY}"  > infra/nginx/ssl/origin.key
+            printf '%s' "${ORIGIN_CERT}" | base64 -d > infra/nginx/ssl/origin.pem
+            printf '%s' "${ORIGIN_KEY}"  | base64 -d > infra/nginx/ssl/origin.key
             chmod 600 infra/nginx/ssl/origin.key
 
             printf 'port: 7880\nrtc:\n  port_range_start: 50000\n  port_range_end: 60000\n  tcp_port: 7881\nkeys:\n  %s: %s\nlogging:\n  level: info\n' \

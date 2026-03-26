@@ -98,9 +98,10 @@ jobs:
             } > infra/compose/.env
 
             # Write Cloudflare Origin Certificate for nginx SSL
+            # Secrets are stored as base64 to survive SSH transport (PEM has newlines)
             mkdir -p infra/nginx/ssl
-            printf '%s\n' "${ORIGIN_CERT}" > infra/nginx/ssl/origin.pem
-            printf '%s\n' "${ORIGIN_KEY}"  > infra/nginx/ssl/origin.key
+            printf '%s' "${ORIGIN_CERT}" | base64 -d > infra/nginx/ssl/origin.pem
+            printf '%s' "${ORIGIN_KEY}"  | base64 -d > infra/nginx/ssl/origin.key
             chmod 600 infra/nginx/ssl/origin.key
 
             # Write livekit.yaml (contains API keys — excluded from git archive)
@@ -109,11 +110,11 @@ jobs:
               > infra/compose/livekit.yaml
 
             # Pull new images for workers + celery only
-            # (postgres/valkey/nginx/monitoring keep running unchanged)
+            # (postgres/valkey/monitoring keep running unchanged)
             docker compose -f infra/compose/docker-compose.mainpc.yml pull workers celery
 
             docker compose -f infra/compose/docker-compose.mainpc.yml \
-              up -d --no-build --force-recreate workers celery
+              up -d --no-build --force-recreate workers celery nginx
 
             # Run database migrations (golang:alpine avoids ghcr.io auth issues)
             docker run --rm \
