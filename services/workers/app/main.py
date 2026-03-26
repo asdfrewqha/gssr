@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -6,9 +8,10 @@ from app.api import admin_maps, admin_panos, admin_users, health
 
 app = FastAPI(title="GSSR Workers", version="1.0.0")
 
+origins = os.getenv("ADMIN_CORS_ORIGINS", "http://localhost:5174").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174"],  # admin panel
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

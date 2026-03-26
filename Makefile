@@ -6,7 +6,7 @@ COMPOSE_TEST := docker compose -f infra/compose/docker-compose.test.yml
 COMPOSE_DEV  := docker compose -f infra/compose/docker-compose.mainpc.yml
 
 .PHONY: help dev dev-down test test-go test-python test-frontend e2e \
-        test-up test-down lint lint-go lint-python migrate-up migrate-reset vendor
+        test-up test-down lint lint-go lint-python lint-frontend lint-admin fmt migrate-up migrate-reset vendor
 
 # ─────────────────────────────────────────────
 # Help
@@ -41,6 +41,9 @@ help:
 	@echo "    make lint         — run all linters"
 	@echo "    make lint-go      — golangci-lint on services/game"
 	@echo "    make lint-python  — ruff + mypy on services/workers"
+	@echo "    make lint-frontend— eslint on frontend"
+	@echo "    make lint-admin   — eslint on admin"
+	@echo "    make fmt          — auto-format all code"
 
 # ─────────────────────────────────────────────
 # Development stack
@@ -124,10 +127,25 @@ migrate-reset:
 # ─────────────────────────────────────────────
 # Linting
 # ─────────────────────────────────────────────
-lint: lint-go lint-python
+lint: lint-go lint-python lint-frontend lint-admin
 
 lint-go:
 	cd services/game && golangci-lint run ./...
 
 lint-python:
 	cd services/workers && ruff check app/ && mypy app/
+
+lint-frontend:
+	cd frontend && npx eslint src/ --ext .ts,.tsx
+
+lint-admin:
+	cd admin && npx eslint src/ --ext .ts,.tsx
+
+# ─────────────────────────────────────────────
+# Formatting
+# ─────────────────────────────────────────────
+fmt:
+	cd services/game && gofmt -w -s .
+	cd services/workers && ruff format app/
+	cd frontend && npx prettier --write src/
+	cd admin && npx prettier --write src/

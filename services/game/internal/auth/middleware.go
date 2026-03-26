@@ -10,19 +10,28 @@ const (
 	ctxIsAdmin = "isAdmin"
 )
 
+// parseAndStoreClaims validates the JWT access cookie and stores claims in locals.
+// It does NOT call c.Next(), so callers can add further checks before proceeding.
+func parseAndStoreClaims(c *fiber.Ctx, secret []byte) error {
+	token := c.Cookies("access_token")
+	if token == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing token"})
+	}
+	claims, err := Verify(secret, token)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token"})
+	}
+	c.Locals(ctxUserID, claims.UserID)
+	c.Locals(ctxIsAdmin, claims.IsAdmin)
+	return nil
+}
+
 // Required validates the JWT access cookie and stores claims in locals.
 func Required(secret []byte) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		token := c.Cookies("access_token")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing token"})
+		if err := parseAndStoreClaims(c, secret); err != nil {
+			return err
 		}
-		claims, err := Verify(secret, token)
-		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token"})
-		}
-		c.Locals(ctxUserID, claims.UserID)
-		c.Locals(ctxIsAdmin, claims.IsAdmin)
 		return c.Next()
 	}
 }
@@ -30,7 +39,7 @@ func Required(secret []byte) fiber.Handler {
 // AdminRequired additionally checks the isAdmin claim.
 func AdminRequired(secret []byte) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if err := Required(secret)(c); err != nil {
+		if err := parseAndStoreClaims(c, secret); err != nil {
 			return err
 		}
 		if !c.Locals(ctxIsAdmin).(bool) {

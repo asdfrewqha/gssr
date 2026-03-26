@@ -6,9 +6,8 @@ import (
 )
 
 type Config struct {
-	Port           string
-	MetricsPort    string
-	PostgresURL    string
+	Port          string
+	PostgresURL   string
 	ValkeyURL      string
 	JWTSecret      []byte
 	JWTAccessTTL   time.Duration
@@ -23,9 +22,8 @@ func Load() *Config {
 	refreshTTL, _ := time.ParseDuration(getEnv("JWT_REFRESH_TTL", "168h"))
 
 	return &Config{
-		Port:          getEnv("PORT", "3000"),
-		MetricsPort:   getEnv("METRICS_PORT", "2112"),
-		PostgresURL:   mustEnv("POSTGRES_URL"),
+		Port:        getEnv("PORT", "3000"),
+		PostgresURL: mustEnv("POSTGRES_URL"),
 		ValkeyURL:     mustEnv("VALKEY_URL"),
 		JWTSecret:     []byte(mustEnv("JWT_SECRET")),
 		JWTAccessTTL:  accessTTL,

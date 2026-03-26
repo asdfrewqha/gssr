@@ -109,12 +109,12 @@ jobs:
               "${LIVEKIT_API_KEY}" "${LIVEKIT_API_SECRET}" \
               > infra/compose/livekit.yaml
 
-            # Pull new images for workers + celery only
+            # Pull new images for workers + celery + game
             # (postgres/valkey/monitoring keep running unchanged)
-            docker compose -f infra/compose/docker-compose.mainpc.yml pull workers celery
+            docker compose -f infra/compose/docker-compose.mainpc.yml pull workers celery game
 
             docker compose -f infra/compose/docker-compose.mainpc.yml \
-              up -d --no-build --force-recreate workers celery nginx
+              up -d --no-build --force-recreate workers celery game nginx
 
             # Run database migrations (golang:alpine avoids ghcr.io auth issues)
             docker run --rm \

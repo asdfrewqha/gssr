@@ -1,0 +1,19 @@
+run:
+  timeout: 3m
+  skip-dirs:
+    - vendor
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosimple
+    - misspell
+    - gosec
+    - bodyclose
+
+linters-settings:
+  gosec:
+    excludes:
+      - G104  # unhandled errors in defers are fine
