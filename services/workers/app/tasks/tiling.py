@@ -1,13 +1,12 @@
+import logging
 import os
 import tempfile
-import logging
-from pathlib import Path
 
 import pyvips
 
-from app.tasks.celery_app import celery_app
 from app.config import settings
 from app.storage.minio_client import minio_client
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +14,9 @@ logger = logging.getLogger(__name__)
 @celery_app.task(name="tile_panorama", bind=True, max_retries=3)
 def tile_panorama(self, pano_id: str):
     """Download raw panorama from MinIO, generate DeepZoom tiles, upload back."""
-    from app.db.base import sync_engine
     from sqlalchemy import text
+
+    from app.db.base import sync_engine
 
     logger.info("Tiling panorama %s", pano_id)
 
@@ -54,9 +54,7 @@ def tile_panorama(self, pano_id: str):
                     local_path = os.path.join(root, fname)
                     rel = os.path.relpath(local_path, out_dir)
                     minio_key = f"{prefix}/{rel}".replace("\\", "/")
-                    minio_client.fput_object(
-                        settings.minio_bucket, minio_key, local_path
-                    )
+                    minio_client.fput_object(settings.minio_bucket, minio_key, local_path)
 
         # Mark as tiled
         with sync_engine.begin() as conn:
@@ -73,4 +71,4 @@ def tile_panorama(self, pano_id: str):
                 text("UPDATE panoramas SET tile_status = 'failed' WHERE id = :id"),
                 {"id": pano_id},
             )
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60) from exc

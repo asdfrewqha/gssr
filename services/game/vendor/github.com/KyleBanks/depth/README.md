@@ -1,6 +1,6 @@
-# depth 
+# depth
 
-[![GoDoc](https://godoc.org/github.com/KyleBanks/depth?status.svg)](https://godoc.org/github.com/KyleBanks/depth)&nbsp; 
+[![GoDoc](https://godoc.org/github.com/KyleBanks/depth?status.svg)](https://godoc.org/github.com/KyleBanks/depth)&nbsp;
 [![Build Status](https://travis-ci.org/KyleBanks/depth.svg?branch=master)](https://travis-ci.org/KyleBanks/depth)&nbsp;
 [![Go Report Card](https://goreportcard.com/badge/github.com/KyleBanks/depth)](https://goreportcard.com/report/github.com/KyleBanks/depth)&nbsp;
 [![Coverage Status](https://coveralls.io/repos/github/KyleBanks/depth/badge.svg?branch=master)](https://coveralls.io/github/KyleBanks/depth?branch=master)
@@ -65,7 +65,7 @@ strings
 Visualizing multiple packages at a time is supported by simply naming the packages you'd like to visualize:
 
 ```sh
-$ depth strings github.com/KyleBanks/depth 
+$ depth strings github.com/KyleBanks/depth
 strings
   ├ errors
   ├ io
@@ -107,7 +107,7 @@ strings
 12 dependencies (12 internal, 0 external, 0 testing).
 ```
 
-#### `-max` 
+#### `-max`
 
 The `-max` flag limits the dependency tree to the maximum depth provided. For example, if you supply `-max 1` on the `depth` package, your output would look like so:
 
@@ -205,7 +205,7 @@ if err != nil {
 }
 
 // Output: "'strings' has 4 dependencies."
-log.Printf("'%v' has %v dependencies.", t.Root.Name, len(t.Root.Deps)) 
+log.Printf("'%v' has %v dependencies.", t.Root.Name, len(t.Root.Deps))
 ```
 
 For additional customization, simply set the appropriate flags on the `Tree` before resolving:

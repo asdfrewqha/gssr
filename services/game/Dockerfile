@@ -15,9 +15,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOARM=${TARGETARM} \
     go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/game-server ./cmd/server
 
 # --- Final image ---
-FROM scratch
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /out/game-server /game-server
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-EXPOSE 3000 2112
+EXPOSE 3000
 ENTRYPOINT ["/game-server"]

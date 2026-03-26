@@ -14,7 +14,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// swagger request/response types
+// Swagger request/response types (used by swag annotations above handlers).
+var (
+	_ = registerRequest{}
+	_ = loginRequest{}
+	_ = authResponse{}
+	_ = errorResponse{}
+)
 
 type registerRequest struct {
 	Username string `json:"username" example:"alice"`
@@ -179,7 +185,9 @@ func (h *Handler) issueTokens(c *fiber.Ctx, userIDStr string, isAdmin bool) erro
 
 	// Generate opaque refresh token stored in Valkey
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
+	}
 	refreshToken := hex.EncodeToString(b)
 
 	// Sign refresh token as JWT for expiry verification

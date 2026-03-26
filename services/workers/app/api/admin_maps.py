@@ -1,6 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
 
 router = APIRouter(tags=["admin-maps"])
 
@@ -11,7 +10,7 @@ class MapCreate(BaseModel):
     x_max: float
     y_min: float
     y_max: float
-    coord_type: Optional[str] = "cartesian"
+    coord_type: str | None = "cartesian"
 
 
 @router.get("/maps")

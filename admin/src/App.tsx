@@ -1,3 +1,3 @@
 export default function App() {
-  return <div>GSSR Admin</div>
+  return <div>GSSR Admin</div>;
 }

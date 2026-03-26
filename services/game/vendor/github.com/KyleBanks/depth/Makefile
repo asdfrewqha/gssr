@@ -4,7 +4,7 @@ RELEASE_PKG = ./cmd/depth
 INSTALL_PKG = $(RELEASE_PKG)
 
 
-# Remote includes require 'mmake' 
+# Remote includes require 'mmake'
 # github.com/tj/mmake
 include github.com/KyleBanks/make/go/install
 include github.com/KyleBanks/make/go/sanity
@@ -16,7 +16,7 @@ include github.com/KyleBanks/make/git/precommit
 example: | install
 	depth github.com/KyleBanks/depth/cmd/depth strings ./
 
-	depth -internal strings 
+	depth -internal strings
 
 	depth -json github.com/KyleBanks/depth/cmd/depth
 

@@ -1,3 +1,3 @@
 export default function App() {
-  return <div>GSSR</div>
+  return <div>GSSR</div>;
 }

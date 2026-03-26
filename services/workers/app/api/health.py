@@ -1,7 +1,8 @@
 from fastapi import APIRouter
+
+from app.config import settings
 from app.db.base import engine
 from app.storage.minio_client import minio_client
-from app.config import settings
 
 router = APIRouter(tags=["health"])
 

@@ -1,5 +1,4 @@
-import pytest
-from app.tasks.elo import expected_score, new_elo, K_NEW, K_EXP
+from app.tasks.elo import K_EXP, K_NEW, expected_score, new_elo
 
 
 def test_expected_score_equal_ratings():

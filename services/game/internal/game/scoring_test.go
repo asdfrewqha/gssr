@@ -1,6 +1,7 @@
 package game_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/gssr/game/internal/game"

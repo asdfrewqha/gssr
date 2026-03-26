@@ -109,9 +109,24 @@ services:
       - game
 
   # Admin panels — localhost only, access via SSH tunnel:
-  #   ssh -L 3001:localhost:3001 -L 9001:localhost:9001 \
+  #   ssh -L 3001:localhost:3001 -L 5050:localhost:5050 -L 9001:localhost:9001 \
   #       -L 15672:localhost:15672 -L 9002:localhost:9002 \
-  #       -p 1337 deploy@<server-ip>
+  #       -p $SSH_PORT deploy@<server-ip>
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@gssr.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 5050
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "127.0.0.1:5050:5050"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   portainer:
     image: portainer/portainer-ce:latest
     restart: unless-stopped
@@ -132,6 +147,8 @@ services:
     volumes:
       - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    extra_hosts:
+      - "dockerhost:host-gateway"
 
   grafana:
     image: grafana/grafana:10.4.2
@@ -205,6 +222,7 @@ volumes:
   valkey_data:
   rabbitmq_data:
   minio_data:
+  pgadmin_data:
   portainer_data:
   prometheus_data:
   grafana_data:

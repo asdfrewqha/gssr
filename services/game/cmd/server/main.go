@@ -93,7 +93,9 @@ func main() {
 	go func() {
 		<-quit
 		log.Println("shutting down...")
-		app.Shutdown()
+		if err := app.Shutdown(); err != nil {
+			log.Printf("shutdown error: %v", err)
+		}
 	}()
 
 	log.Printf("listening on :%s", cfg.Port)

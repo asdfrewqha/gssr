@@ -1,14 +1,14 @@
 import logging
-import tempfile
 import os
+import tempfile
 
 import numpy as np
 import onnxruntime as rt
 from PIL import Image
 
-from app.tasks.celery_app import celery_app
 from app.config import settings
 from app.storage.minio_client import minio_client
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,9 @@ def _preprocess(img_path: str) -> np.ndarray:
 @celery_app.task(name="moderate_panorama", bind=True, max_retries=2)
 def moderate_panorama(self, pano_id: str):
     """Run NSFW detection on a panorama's raw image."""
-    from app.db.base import sync_engine
     from sqlalchemy import text
+
+    from app.db.base import sync_engine
 
     logger.info("Moderating panorama %s", pano_id)
 
@@ -51,7 +52,7 @@ def moderate_panorama(self, pano_id: str):
         # Expected output: [[drawings, hentai, neutral, porn, sexy]]
         scores = outputs[0][0]
         classes = ["drawings", "hentai", "neutral", "porn", "sexy"]
-        result = dict(zip(classes, scores.tolist()))
+        result = dict(zip(classes, scores.tolist(), strict=False))
         nsfw_score = result.get("porn", 0) + result.get("hentai", 0)
 
         os.unlink(tmp_path)
@@ -71,4 +72,4 @@ def moderate_panorama(self, pano_id: str):
 
     except Exception as exc:
         logger.error("Moderation failed for %s: %s", pano_id, exc)
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc

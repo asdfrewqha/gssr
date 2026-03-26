@@ -1,7 +1,7 @@
 # 🗺️ Architecture Blueprint: GeoGuessr Enterprise (School Edition)
 
-Версия: 1.0  
-Тип развертывания: Self-Hosted / Hybrid Edge Cluster  
+Версия: 1.0
+Тип развертывания: Self-Hosted / Hybrid Edge Cluster
 Масштабируемость: Поддержка неограниченного числа кастомных 2D-карт и комнат до 40+ игроков.
 
 ---

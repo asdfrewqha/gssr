@@ -962,7 +962,7 @@ If the struct is defined in a dependency package, use `--parseDependency`.
 
 If the struct is defined in your main project, use `--parseInternal`.
 
-if you want to include both internal and from dependencies use both flags 
+if you want to include both internal and from dependencies use both flags
 ```
 swag init --parseDependency --parseInternal
 ```
