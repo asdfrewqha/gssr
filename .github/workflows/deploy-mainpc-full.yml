@@ -1,21 +1,73 @@
 name: Full Stack Deploy (Main PC)
 
 # Brings up ALL services on the main PC.
-# Use on first setup or after infra config changes (nginx, prometheus, etc.)
-# Rolling workers/celery updates use deploy-mainpc.yml instead.
+# Triggered after Tests pass when infra/ files changed, or manually.
+# Waits for image builds to complete before deploying.
+# Rolling workers/game updates use deploy-mainpc.yml instead.
 
 on:
-  workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'infra/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-mainpc
+  cancel-in-progress: false
 
 jobs:
+  check:
+    name: Check if deploy needed
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.result.outputs.value }}
+    steps:
+      - name: Check for infra changes
+        if: github.event_name != 'workflow_dispatch'
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          COUNT=$(gh api "repos/${{ github.repository }}/commits/$SHA" \
+            --jq '[.files[].filename | select(startswith("infra/"))] | length')
+          echo "changed=$( [ "$COUNT" -gt 0 ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
+      - id: result
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ steps.diff.outputs.changed }}" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
+    name: Deploy full stack
+    needs: check
+    if: needs.check.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Wait for image builds
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          for wf in "build-game.yml" "build-workers.yml"; do
+            RUN_ID=$(gh run list --workflow="$wf" --branch=main -L 10 \
+              --json headSha,databaseId \
+              -q ".[] | select(.headSha==\"$SHA\") | .databaseId" | head -1)
+            if [ -n "$RUN_ID" ]; then
+              echo "Waiting for $wf (run $RUN_ID)..."
+              gh run watch "$RUN_ID" --exit-status
+            else
+              echo "No $wf run for $SHA — skipping"
+            fi
+          done
 
       - name: Create deploy archive
         run: git archive HEAD infra/ migrations/ -o deploy.tar.gz
@@ -45,12 +97,13 @@ jobs:
           DOMAIN:              ${{ vars.DOMAIN }}
           ORIGIN_CERT:         ${{ secrets.ORIGIN_CERT }}
           ORIGIN_KEY:          ${{ secrets.ORIGIN_KEY }}
+          PGADMIN_PASSWORD:    ${{ secrets.PGADMIN_PASSWORD }}
         with:
           host:     ${{ secrets.MAINPC_SSH_HOST }}
           username: deploy
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     1337
-          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY
+          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY,PGADMIN_PASSWORD
           script: |
             set -e
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
@@ -90,6 +143,8 @@ jobs:
               printf 'GRAFANA_PASSWORD=%s\n'       "${GRAFANA_PASSWORD}"
               printf 'DOMAIN=%s\n'                 "${DOMAIN}"
               printf 'DOCKERHUB_USERNAME=%s\n'     "${DOCKERHUB_USERNAME}"
+              printf 'PGADMIN_EMAIL=admin@%s\n'    "${DOMAIN}"
+              printf 'PGADMIN_PASSWORD=%s\n'       "${PGADMIN_PASSWORD}"
             } > infra/compose/.env
 
             # Write Cloudflare Origin Certificate for nginx SSL

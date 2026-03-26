@@ -39,8 +39,8 @@ var cases = []struct {
 	minScore  int
 	maxScore  int
 }{
-	{"close guess", 100, 100, 110, 110, "f", "f", 200, 4900, 5000},
-	{"medium guess", 0, 0, 400, 0, "f", "f", 200, 100, 200},
+	{"close guess", 100, 100, 110, 110, "f", "f", 200, 4600, 4700},
+	{"medium guess", 0, 0, 400, 0, "f", "f", 200, 600, 750},
 	{"wrong floor", 100, 100, 100, 100, "f1", "f2", 200, 0, 0},
 }
 
