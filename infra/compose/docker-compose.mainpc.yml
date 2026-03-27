@@ -150,8 +150,6 @@ services:
     volumes:
       - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    extra_hosts:
-      - "dockerhost:host-gateway"
 
   grafana:
     image: grafana/grafana:10.4.2
@@ -202,7 +200,6 @@ services:
     image: prom/node-exporter:v1.8.0
     restart: unless-stopped
     pid: host
-    network_mode: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -210,6 +207,7 @@ services:
     command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
 
   postgres-exporter:
