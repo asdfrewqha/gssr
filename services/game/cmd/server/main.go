@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	fiberprometheus "github.com/ansrivas/fiberprometheus/v2"
+	fiberws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -27,8 +28,11 @@ import (
 	"github.com/gssr/game/internal/auth"
 	"github.com/gssr/game/internal/config"
 	"github.com/gssr/game/internal/db"
-	"github.com/gssr/game/internal/ws"
 	_ "github.com/gssr/game/docs"
+	"github.com/gssr/game/internal/maps"
+	"github.com/gssr/game/internal/room"
+	"github.com/gssr/game/internal/user"
+	"github.com/gssr/game/internal/ws"
 )
 
 func main() {
@@ -84,8 +88,35 @@ func main() {
 	authGroup.Post("/refresh", authHandler.Refresh)
 	authGroup.Post("/logout", auth.Required(cfg.JWTSecret), authHandler.Logout)
 
-	// TODO: wire remaining handlers (user, map, room, game, ws, livekit)
-	_ = hub
+	// Users
+	userHandler := user.NewHandler(pg)
+	api.Get("/users/me", auth.Required(cfg.JWTSecret), userHandler.GetMe)
+
+	// Maps (public)
+	mapsHandler := maps.NewHandler(pg)
+	api.Get("/maps", mapsHandler.List)
+	api.Get("/maps/:id", mapsHandler.Get)
+
+	// Rooms + game flow (all auth-required)
+	roomStore := room.NewStore(valkey)
+	roomHandler := room.NewHandler(cfg, pg, roomStore, hub)
+	rooms := api.Group("/rooms", auth.Required(cfg.JWTSecret))
+	rooms.Post("", roomHandler.Create)
+	rooms.Get("/:id", roomHandler.Get)
+	rooms.Post("/:id/join", roomHandler.Join)
+	rooms.Delete("/:id/leave", roomHandler.Leave)
+	rooms.Post("/:id/start", roomHandler.Start)
+	rooms.Post("/:id/guess", roomHandler.Guess)
+	rooms.Get("/:id/livekit-token", roomHandler.LiveKitToken)
+
+	// WebSocket: run auth middleware first, then upgrade
+	app.Use("/ws/rooms/:id", auth.Required(cfg.JWTSecret), func(c *fiber.Ctx) error {
+		if fiberws.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	app.Get("/ws/rooms/:id", fiberws.New(roomHandler.WsRoom))
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

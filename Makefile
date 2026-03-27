@@ -136,10 +136,10 @@ lint-python:
 	cd services/workers && ruff check app/ && mypy app/
 
 lint-frontend:
-	cd frontend && npx eslint src/ --ext .ts,.tsx
+	cd frontend && npm run lint
 
 lint-admin:
-	cd admin && npx eslint src/ --ext .ts,.tsx
+	cd admin && npm run lint
 
 # ─────────────────────────────────────────────
 # Formatting

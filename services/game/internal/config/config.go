@@ -15,6 +15,7 @@ type Config struct {
 	LiveKitURL     string
 	LiveKitAPIKey  string
 	LiveKitSecret  string
+	WorkersURL     string
 }
 
 func Load() *Config {
@@ -31,6 +32,7 @@ func Load() *Config {
 		LiveKitURL:    getEnv("LIVEKIT_URL", ""),
 		LiveKitAPIKey: getEnv("LIVEKIT_API_KEY", ""),
 		LiveKitSecret: getEnv("LIVEKIT_API_SECRET", ""),
+		WorkersURL:    getEnv("WORKERS_URL", "http://workers:8000"),
 	}
 }
 
