@@ -133,7 +133,7 @@ jobs:
               printf 'JWT_REFRESH_TTL=168h\n'
               printf 'WORKERS_DATABASE_URL=postgresql+asyncpg://gssr:%s@postgres:5432/gssr\n' "${POSTGRES_PASSWORD}"
               printf 'ADMIN_JWT_SECRET=%s\n'       "${JWT_SECRET}"
-              printf 'CORS_ORIGINS=https://%s\n'  "${DOMAIN}"
+              printf 'CORS_ORIGINS=https://%s,https://admin.%s\n' "${DOMAIN}" "${DOMAIN}"
               printf 'ADMIN_CORS_ORIGINS=https://admin.%s\n' "${DOMAIN}"
               printf 'NSFW_MODEL_PATH=/app/models/nsfw.onnx\n'
               printf 'NSFW_THRESHOLD=0.7\n'
@@ -146,6 +146,10 @@ jobs:
               printf 'PGADMIN_EMAIL=admin@%s\n'    "${DOMAIN}"
               printf 'PGADMIN_PASSWORD=%s\n'       "${PGADMIN_PASSWORD}"
             } > infra/compose/.env
+
+            # Substitute ${DOMAIN} in nginx upstream config.
+            envsubst '${DOMAIN}' < infra/nginx/upstream.conf > infra/nginx/upstream_sub.conf
+            mv infra/nginx/upstream_sub.conf infra/nginx/upstream.conf
 
             # Write Cloudflare Origin Certificate for nginx SSL
             # Secrets are stored as base64 to survive SSH transport (PEM has newlines)

@@ -21,7 +21,7 @@ jobs:
         working-directory: admin
         run: npm ci && npm run build
         env:
-          VITE_ADMIN_API_URL: ${{ vars.VITE_ADMIN_API_URL }}
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           VITE_MINIO_URL: ${{ vars.VITE_MINIO_URL }}
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
