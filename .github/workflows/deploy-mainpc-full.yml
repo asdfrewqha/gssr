@@ -1,8 +1,8 @@
 name: Full Stack Deploy (Main PC)
 
 # Brings up ALL services on the main PC.
-# Triggered after Tests pass when infra/ files changed, or manually.
-# Waits for image builds to complete before deploying.
+# Triggered after unit Tests pass when infra/ files changed, or manually.
+# E2E runs independently and does not affect this workflow.
 # Rolling workers/game updates use deploy-mainpc.yml instead.
 
 on:
