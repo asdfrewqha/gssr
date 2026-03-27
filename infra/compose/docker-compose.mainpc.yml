@@ -31,6 +31,7 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ../rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     ports:
       - "127.0.0.1:15672:15672"
 
@@ -180,6 +181,7 @@ services:
     image: grafana/promtail:3.0.0
     restart: unless-stopped
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ../monitoring/promtail.yml:/etc/promtail/config.yml:ro
