@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "GSSR Postgres",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "gssr",
+      "Username": "gssr",
+      "SSLMode": "disable",
+      "PassFile": "/pgpassfile"
+    }
+  }
+}
