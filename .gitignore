@@ -23,10 +23,10 @@ services/workers/.coverage
 services/workers/models/     # NSFW model binary (~50MB)
 
 # Node
-frontend/node_modules/
+node_modules/
+.prettier-caches/
 frontend/dist/
 frontend/coverage/
-admin/node_modules/
 admin/dist/
 
 # Cloudflare tunnel credentials (contains private key)

@@ -1,8 +1,26 @@
 import axios from "axios";
 
-const adminClient = axios.create({
-  baseURL: import.meta.env.VITE_ADMIN_API_URL || "http://localhost:8000",
+// Relative base URL so vite proxy handles routing in dev.
+// In production (Cloudflare Pages) set VITE_API_BASE to the backend origin.
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || "",
   withCredentials: true,
 });
 
-export default adminClient;
+api.interceptors.response.use(
+  (r) => r,
+  async (error) => {
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+      try {
+        await api.post("/api/auth/refresh");
+        return api(error.config);
+      } catch {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+export default api;

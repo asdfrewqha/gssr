@@ -6,8 +6,13 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      '/api': {
+        target: process.env.VITE_GAME_URL || 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true,
+      },
       '/admin': {
-        target: process.env.VITE_ADMIN_API_URL || 'http://localhost:8000',
+        target: process.env.VITE_WORKERS_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
     },
