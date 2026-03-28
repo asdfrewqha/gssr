@@ -1,0 +1,248 @@
+name: Build & Deploy
+
+# Single workflow that handles everything:
+#   services/** changed  → build images → rolling deploy (restart game/workers/celery)
+#   infra/** changed     → (skip build) → full deploy (bring up all services)
+#   both changed         → build images → full deploy
+#   workflow_dispatch    → build images → full deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infra/**"
+      - "migrations/**"
+      - ".github/workflows/build-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-mainpc
+  cancel-in-progress: false
+
+jobs:
+  # ── Detect which parts of the repo changed ───────────────────────────────
+  changed:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.check.outputs.services }}
+      infra:    ${{ steps.check.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "services=true" >> "$GITHUB_OUTPUT"
+            echo "infra=true"    >> "$GITHUB_OUTPUT"
+          else
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+            echo "services=$(echo "$CHANGED" | grep -q '^services/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "infra=$(echo "$CHANGED" | grep -qE '^(infra|migrations)/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Build game image (multi-arch) ─────────────────────────────────────────
+  build-game:
+    name: Build Game Service
+    needs: changed
+    if: needs.changed.outputs.services == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/gssr-game
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=short
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context:    services/game
+          platforms:  linux/amd64,linux/arm/v7
+          push:       true
+          tags:       ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=game
+          cache-to:   type=gha,mode=max,scope=game
+
+  # ── Build workers image ────────────────────────────────────────────────────
+  build-workers:
+    name: Build Workers Service
+    needs: changed
+    if: needs.changed.outputs.services == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/gssr-workers
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=short
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context:    services/workers
+          platforms:  linux/amd64
+          push:       true
+          tags:       ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=workers
+          cache-to:   type=gha,mode=max,scope=workers
+
+  # ── Deploy ─────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    needs: [changed, build-game, build-workers]
+    if: |
+      always() &&
+      needs.changed.result == 'success' &&
+      (needs.build-game.result == 'success' || needs.build-game.result == 'skipped') &&
+      (needs.build-workers.result == 'success' || needs.build-workers.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create deploy archive
+        run: git archive HEAD infra/ migrations/ -o deploy.tar.gz
+
+      - name: Upload archive
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.MAINPC_SSH_HOST }}
+          username: deploy
+          key:      ${{ secrets.MAINPC_SSH_KEY }}
+          port:     ${{ secrets.MAINPC_SSH_PORT }}
+          source:   deploy.tar.gz
+          target:   /home/deploy/
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1
+        env:
+          FULL_DEPLOY:         ${{ needs.changed.outputs.infra }}
+          POSTGRES_PASSWORD:   ${{ secrets.POSTGRES_PASSWORD }}
+          RABBITMQ_PASS:       ${{ secrets.RABBITMQ_PASS }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          JWT_SECRET:          ${{ secrets.JWT_SECRET }}
+          LIVEKIT_API_KEY:     ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET:  ${{ secrets.LIVEKIT_API_SECRET }}
+          GRAFANA_PASSWORD:    ${{ secrets.GRAFANA_PASSWORD }}
+          DOCKERHUB_USERNAME:  ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN:     ${{ secrets.DOCKERHUB_TOKEN }}
+          DOMAIN:              ${{ vars.DOMAIN }}
+          ORIGIN_CERT:         ${{ secrets.ORIGIN_CERT }}
+          ORIGIN_KEY:          ${{ secrets.ORIGIN_KEY }}
+          PGADMIN_PASSWORD:    ${{ secrets.PGADMIN_PASSWORD }}
+          ADMIN_USERNAME:      ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD:      ${{ secrets.ADMIN_PASSWORD }}
+          SMTP_HOST:           ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:           ${{ vars.SMTP_PORT }}
+          SMTP_USER:           ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:       ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM:           ${{ vars.SMTP_FROM }}
+        with:
+          host:     ${{ secrets.MAINPC_SSH_HOST }}
+          username: deploy
+          key:      ${{ secrets.MAINPC_SSH_KEY }}
+          port:     ${{ secrets.MAINPC_SSH_PORT }}
+          envs:     FULL_DEPLOY,POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY,PGADMIN_PASSWORD,ADMIN_USERNAME,ADMIN_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM
+          script: |
+            set -e
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            mkdir -p /opt/gssr
+            tar -xzf ~/deploy.tar.gz -C /opt/gssr --overwrite --no-same-owner
+            rm -f ~/deploy.tar.gz
+            cd /opt/gssr
+
+            # Write infra/compose/.env (always — rolling deploy also needs fresh config)
+            {
+              printf 'POSTGRES_USER=gssr\n'
+              printf 'POSTGRES_PASSWORD=%s\n'      "${POSTGRES_PASSWORD}"
+              printf 'POSTGRES_DB=gssr\n'
+              printf 'DATABASE_URL=postgres://gssr:%s@postgres:5432/gssr?sslmode=disable\n' "${POSTGRES_PASSWORD}"
+              printf 'VALKEY_URL=redis://valkey:6379\n'
+              printf 'RABBITMQ_USER=gssr\n'
+              printf 'RABBITMQ_PASS=%s\n'          "${RABBITMQ_PASS}"
+              printf 'RABBITMQ_URL=amqp://gssr:%s@rabbitmq:5672/\n' "${RABBITMQ_PASS}"
+              printf 'MINIO_ROOT_USER=gssr\n'
+              printf 'MINIO_ROOT_PASSWORD=%s\n'    "${MINIO_ROOT_PASSWORD}"
+              printf 'MINIO_ACCESS_KEY=gssr\n'
+              printf 'MINIO_SECRET_KEY=%s\n'       "${MINIO_ROOT_PASSWORD}"
+              printf 'MINIO_ENDPOINT=minio:9000\n'
+              printf 'MINIO_BUCKET=gssr\n'
+              printf 'POSTGRES_URL=postgres://gssr:%s@postgres:5432/gssr?sslmode=disable\n' "${POSTGRES_PASSWORD}"
+              printf 'JWT_SECRET=%s\n'             "${JWT_SECRET}"
+              printf 'JWT_ACCESS_TTL=15m\n'
+              printf 'JWT_REFRESH_TTL=168h\n'
+              printf 'WORKERS_DATABASE_URL=postgresql+asyncpg://gssr:%s@postgres:5432/gssr\n' "${POSTGRES_PASSWORD}"
+              printf 'ADMIN_JWT_SECRET=%s\n'       "${JWT_SECRET}"
+              printf 'CORS_ORIGINS=https://%s,https://admin.%s\n' "${DOMAIN}" "${DOMAIN}"
+              printf 'ADMIN_CORS_ORIGINS=https://admin.%s\n' "${DOMAIN}"
+              printf 'NSFW_MODEL_PATH=/app/models/nsfw.onnx\n'
+              printf 'NSFW_THRESHOLD=0.7\n'
+              printf 'LIVEKIT_URL=ws://livekit:7880\n'
+              printf 'LIVEKIT_API_KEY=%s\n'        "${LIVEKIT_API_KEY}"
+              printf 'LIVEKIT_API_SECRET=%s\n'     "${LIVEKIT_API_SECRET}"
+              printf 'GRAFANA_PASSWORD=%s\n'       "${GRAFANA_PASSWORD}"
+              printf 'DOMAIN=%s\n'                 "${DOMAIN}"
+              printf 'DOCKERHUB_USERNAME=%s\n'     "${DOCKERHUB_USERNAME}"
+              printf 'PGADMIN_EMAIL=admin@%s\n'    "${DOMAIN}"
+              printf 'PGADMIN_PASSWORD=%s\n'       "${PGADMIN_PASSWORD}"
+              printf 'ADMIN_USERNAME=%s\n'         "${ADMIN_USERNAME}"
+              printf 'ADMIN_PASSWORD=%s\n'         "${ADMIN_PASSWORD}"
+              printf 'FRONTEND_URL=https://%s\n'   "${DOMAIN}"
+              printf 'SMTP_HOST=%s\n'              "${SMTP_HOST}"
+              printf 'SMTP_PORT=%s\n'              "${SMTP_PORT:-587}"
+              printf 'SMTP_USER=%s\n'              "${SMTP_USER}"
+              printf 'SMTP_PASSWORD=%s\n'          "${SMTP_PASSWORD}"
+              printf 'SMTP_FROM=%s\n'              "${SMTP_FROM:-noreply@${DOMAIN}}"
+            } > infra/compose/.env
+
+            if [ "${FULL_DEPLOY}" = "true" ]; then
+              # Full deploy: update nginx config, certs, livekit, bring up everything
+              envsubst '${DOMAIN}' < infra/nginx/upstream.conf > infra/nginx/upstream_sub.conf
+              mv infra/nginx/upstream_sub.conf infra/nginx/upstream.conf
+
+              mkdir -p infra/nginx/ssl
+              printf '%s' "${ORIGIN_CERT}" | base64 -d > infra/nginx/ssl/origin.pem
+              printf '%s' "${ORIGIN_KEY}"  | base64 -d > infra/nginx/ssl/origin.key
+              chmod 600 infra/nginx/ssl/origin.key
+
+              printf 'port: 7880\nrtc:\n  port_range_start: 50000\n  port_range_end: 60000\n  tcp_port: 7881\nkeys:\n  %s: %s\nlogging:\n  level: info\n' \
+                "${LIVEKIT_API_KEY}" "${LIVEKIT_API_SECRET}" \
+                > infra/compose/livekit.yaml
+
+              docker compose -f infra/compose/docker-compose.mainpc.yml pull
+              docker compose -f infra/compose/docker-compose.mainpc.yml up -d --force-recreate
+            else
+              # Rolling deploy: restart only application containers
+              docker compose -f infra/compose/docker-compose.mainpc.yml pull workers celery game
+              docker compose -f infra/compose/docker-compose.mainpc.yml \
+                up -d --no-build --force-recreate workers celery game nginx
+            fi
+
+            # Run database migrations (always)
+            docker run --rm \
+              --network gssr_default \
+              -v "$(pwd)/migrations:/migrations" \
+              -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+              golang:1.22-alpine \
+              sh -c 'go install github.com/pressly/goose/v3/cmd/goose@v3.20.0 && goose -dir /migrations postgres "postgres://gssr:${POSTGRES_PASSWORD}@postgres:5432/gssr?sslmode=disable" up'
+
+            echo "Deploy complete (full=${FULL_DEPLOY})"
