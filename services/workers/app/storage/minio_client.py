@@ -1,3 +1,5 @@
+import json
+
 from minio import Minio
 
 from app.config import settings
@@ -9,18 +11,30 @@ minio_client = Minio(
     secure=settings.minio_secure,
 )
 
+# bucket → list of public key prefixes (e.g. "raw/*")
+_BUCKETS: list[tuple[str, list[str]]] = [
+    (settings.minio_bucket_panoramas, ["raw/*", "maps/panoramas/*"]),
+    (settings.minio_bucket_floors, ["maps/*"]),
+    (settings.minio_bucket_avatars, ["avatars/*"]),
+]
 
-def ensure_bucket():
-    if not minio_client.bucket_exists(settings.minio_bucket):
-        minio_client.make_bucket(settings.minio_bucket)
-        # Set public read policy for tiles
-        policy = f"""{{
-            "Version": "2012-10-17",
-            "Statement": [{{
-                "Effect": "Allow",
-                "Principal": {{"AWS": ["*"]}},
-                "Action": ["s3:GetObject"],
-                "Resource": ["arn:aws:s3:::{settings.minio_bucket}/maps/*"]
-            }}]
-        }}"""
-        minio_client.set_bucket_policy(settings.minio_bucket, policy)
+
+def ensure_buckets() -> None:
+    """Create buckets with public-read policy if they don't exist."""
+    for bucket, prefixes in _BUCKETS:
+        if not minio_client.bucket_exists(bucket):
+            minio_client.make_bucket(bucket)
+            policy = json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {"AWS": ["*"]},
+                            "Action": ["s3:GetObject"],
+                            "Resource": [f"arn:aws:s3:::{bucket}/{p}" for p in prefixes],
+                        }
+                    ],
+                }
+            )
+            minio_client.set_bucket_policy(bucket, policy)

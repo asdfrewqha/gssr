@@ -33,7 +33,7 @@ def tile_panorama(self, pano_id: str):
             raw_path = os.path.join(tmpdir, "panorama.jpg")
 
             # Download original
-            minio_client.fget_object(settings.minio_bucket, raw_key, raw_path)
+            minio_client.fget_object(settings.minio_bucket_panoramas, raw_key, raw_path)
 
             # Generate DeepZoom tiles
             out_dir = os.path.join(tmpdir, "tiles")
@@ -54,7 +54,7 @@ def tile_panorama(self, pano_id: str):
                     local_path = os.path.join(root, fname)
                     rel = os.path.relpath(local_path, out_dir)
                     minio_key = f"{prefix}/{rel}".replace("\\", "/")
-                    minio_client.fput_object(settings.minio_bucket, minio_key, local_path)
+                    minio_client.fput_object(settings.minio_bucket_panoramas, minio_key, local_path)
 
         # Mark as tiled
         with sync_engine.begin() as conn:

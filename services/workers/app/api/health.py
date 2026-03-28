@@ -19,7 +19,8 @@ async def health():
         db_ok = False
 
     try:
-        minio_client.bucket_exists(settings.minio_bucket)
+        for b in (settings.minio_bucket_panoramas, settings.minio_bucket_floors, settings.minio_bucket_avatars):
+            minio_client.bucket_exists(b)
     except Exception:
         storage_ok = False
 

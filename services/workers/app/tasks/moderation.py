@@ -43,7 +43,7 @@ def moderate_panorama(self, pano_id: str):
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             tmp_path = f.name
 
-        minio_client.fget_object(settings.minio_bucket, raw_key, tmp_path)
+        minio_client.fget_object(settings.minio_bucket_panoramas, raw_key, tmp_path)
 
         session = _get_session()
         input_name = session.get_inputs()[0].name

@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str
     minio_secret_key: str
-    minio_bucket: str = "gssr"
+    minio_bucket_panoramas: str = "gssr-panoramas"
+    minio_bucket_floors: str = "gssr-floors"
+    minio_bucket_avatars: str = "gssr-avatars"
     minio_secure: bool = False
 
     nsfw_model_path: str = "models/nsfw.onnx"

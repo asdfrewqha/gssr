@@ -6,8 +6,15 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from app.api import admin_admins, admin_maps, admin_panos, admin_users, health, internal
+from app.storage.minio_client import ensure_buckets
 
 app = FastAPI(title="GSSR Workers", version="2.0.0")
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    ensure_buckets()
+
 
 origins = os.getenv("ADMIN_CORS_ORIGINS", "http://localhost:5174").split(",")
 app.add_middleware(

@@ -152,13 +152,13 @@ async def add_floor(
 
     minio_key = f"maps/{map_id}/floors/{f.id}/overlay{ext}"
     minio_client.put_object(
-        settings.minio_bucket,
+        settings.minio_bucket_floors,
         minio_key,
         io.BytesIO(content),
         len(content),
         content_type=image.content_type or "image/jpeg",
     )
-    f.image_url = f"/{settings.minio_bucket}/{minio_key}"
+    f.image_url = f"/{settings.minio_bucket_floors}/{minio_key}"
     await db.commit()
     await db.refresh(f)
     return _floor_obj(f)
@@ -234,8 +234,8 @@ def _ext(filename: str) -> str:
 
 def _delete_minio_prefix(prefix: str) -> None:
     try:
-        objects = minio_client.list_objects(settings.minio_bucket, prefix=prefix, recursive=True)
+        objects = minio_client.list_objects(settings.minio_bucket_floors, prefix=prefix, recursive=True)
         for obj in objects:
-            minio_client.remove_object(settings.minio_bucket, obj.object_name)
+            minio_client.remove_object(settings.minio_bucket_floors, obj.object_name)
     except Exception:
         pass

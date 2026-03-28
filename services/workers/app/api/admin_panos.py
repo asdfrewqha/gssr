@@ -38,7 +38,7 @@ async def upload_panorama(
     content = await image.read()
 
     minio_client.put_object(
-        settings.minio_bucket,
+        settings.minio_bucket_panoramas,
         f"raw/{pano_id}.jpg",
         io.BytesIO(content),
         len(content),
@@ -151,7 +151,7 @@ async def reject_panorama(pano_id: str, db: DB, _: AdminUser):
     await db.commit()
     _delete_minio_prefix(f"maps/panoramas/{pano_id}/")
     with contextlib.suppress(Exception):
-        minio_client.remove_object(settings.minio_bucket, f"raw/{pano_id}.jpg")
+        minio_client.remove_object(settings.minio_bucket_panoramas, f"raw/{pano_id}.jpg")
     return {"id": pano_id, "moderation_status": "rejected"}
 
 
@@ -178,7 +178,7 @@ async def delete_panorama(pano_id: str, db: DB, _: AdminUser):
     await db.commit()
     _delete_minio_prefix(f"maps/panoramas/{pano_id}/")
     with contextlib.suppress(Exception):
-        minio_client.remove_object(settings.minio_bucket, f"raw/{pano_id}.jpg")
+        minio_client.remove_object(settings.minio_bucket_panoramas, f"raw/{pano_id}.jpg")
 
 
 # ──────────────────────────────────────────────
@@ -205,8 +205,8 @@ def _pano_row(p: Panorama, floor_number: int, map_id, map_name: str) -> dict:
 
 def _delete_minio_prefix(prefix: str) -> None:
     try:
-        objects = minio_client.list_objects(settings.minio_bucket, prefix=prefix, recursive=True)
+        objects = minio_client.list_objects(settings.minio_bucket_panoramas, prefix=prefix, recursive=True)
         for obj in objects:
-            minio_client.remove_object(settings.minio_bucket, obj.object_name)
+            minio_client.remove_object(settings.minio_bucket_panoramas, obj.object_name)
     except Exception:
         pass

@@ -15,11 +15,11 @@ const (
 func parseAndStoreClaims(c *fiber.Ctx, secret []byte) error {
 	token := c.Cookies("access_token")
 	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing token"})
+		return fiber.NewError(fiber.StatusUnauthorized, "missing token")
 	}
 	claims, err := Verify(secret, token)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token"})
+		return fiber.NewError(fiber.StatusUnauthorized, "invalid token")
 	}
 	c.Locals(ctxUserID, claims.UserID)
 	c.Locals(ctxIsAdmin, claims.IsAdmin)
@@ -43,7 +43,7 @@ func AdminRequired(secret []byte) fiber.Handler {
 			return err
 		}
 		if !c.Locals(ctxIsAdmin).(bool) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "admin only"})
+			return fiber.NewError(fiber.StatusForbidden, "admin only")
 		}
 		return c.Next()
 	}
