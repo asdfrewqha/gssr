@@ -8,14 +8,17 @@ import (
 type Config struct {
 	Port          string
 	PostgresURL   string
-	ValkeyURL      string
-	JWTSecret      []byte
-	JWTAccessTTL   time.Duration
-	JWTRefreshTTL  time.Duration
-	LiveKitURL     string
-	LiveKitAPIKey  string
-	LiveKitSecret  string
-	WorkersURL     string
+	ValkeyURL     string
+	JWTSecret     []byte
+	JWTAccessTTL  time.Duration
+	JWTRefreshTTL time.Duration
+	LiveKitURL    string
+	LiveKitAPIKey string
+	LiveKitSecret string
+	WorkersURL    string
+	FrontendURL   string
+	AdminUsername string
+	AdminPassword string
 }
 
 func Load() *Config {
@@ -33,6 +36,9 @@ func Load() *Config {
 		LiveKitAPIKey: getEnv("LIVEKIT_API_KEY", ""),
 		LiveKitSecret: getEnv("LIVEKIT_API_SECRET", ""),
 		WorkersURL:    getEnv("WORKERS_URL", "http://workers:8000"),
+		FrontendURL:   getEnv("FRONTEND_URL", "http://localhost:5173"),
+		AdminUsername: getEnv("ADMIN_USERNAME", ""),
+		AdminPassword: getEnv("ADMIN_PASSWORD", ""),
 	}
 }
 

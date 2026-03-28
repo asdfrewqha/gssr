@@ -85,12 +85,19 @@ jobs:
           ORIGIN_CERT:         ${{ secrets.ORIGIN_CERT }}
           ORIGIN_KEY:          ${{ secrets.ORIGIN_KEY }}
           PGADMIN_PASSWORD:    ${{ secrets.PGADMIN_PASSWORD }}
+          ADMIN_USERNAME:      ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD:      ${{ secrets.ADMIN_PASSWORD }}
+          SMTP_HOST:           ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:           ${{ vars.SMTP_PORT }}
+          SMTP_USER:           ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:       ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM:           ${{ vars.SMTP_FROM }}
         with:
           host:     ${{ secrets.MAINPC_SSH_HOST }}
           username: deploy
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     ${{ secrets.MAINPC_SSH_PORT }}
-          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY,PGADMIN_PASSWORD
+          envs:     POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY,PGADMIN_PASSWORD,ADMIN_USERNAME,ADMIN_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM
           script: |
             set -e
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
@@ -134,6 +141,14 @@ jobs:
               printf 'DOCKERHUB_USERNAME=%s\n'     "${DOCKERHUB_USERNAME}"
               printf 'PGADMIN_EMAIL=admin@%s\n'    "${DOMAIN}"
               printf 'PGADMIN_PASSWORD=%s\n'       "${PGADMIN_PASSWORD}"
+              printf 'ADMIN_USERNAME=%s\n'         "${ADMIN_USERNAME}"
+              printf 'ADMIN_PASSWORD=%s\n'         "${ADMIN_PASSWORD}"
+              printf 'FRONTEND_URL=https://%s\n'   "${DOMAIN}"
+              printf 'SMTP_HOST=%s\n'              "${SMTP_HOST}"
+              printf 'SMTP_PORT=%s\n'              "${SMTP_PORT:-587}"
+              printf 'SMTP_USER=%s\n'              "${SMTP_USER}"
+              printf 'SMTP_PASSWORD=%s\n'          "${SMTP_PASSWORD}"
+              printf 'SMTP_FROM=%s\n'              "${SMTP_FROM:-noreply@${DOMAIN}}"
             } > infra/compose/.env
 
             # Substitute ${DOMAIN} in nginx upstream config.

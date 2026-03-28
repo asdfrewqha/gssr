@@ -1,20 +1,16 @@
 import io
-import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, func, select, update
 
-from app.api.deps import AdminUser
+from app.api.deps import DB, AdminUser
 from app.config import settings
-from app.db.base import get_db
+from app.models import Floor, Map, Panorama
 from app.storage.minio_client import minio_client
 
 router = APIRouter(tags=["admin-maps"])
-
-DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 # ──────────────────────────────────────────────
@@ -50,86 +46,59 @@ class MapUpdate(BaseModel):
 @router.get("/maps")
 async def list_maps(db: DB, _: AdminUser):
     rows = (
-        (
-            await db.execute(
-                text("""
-        SELECT m.id, m.name, COALESCE(m.description,'') AS description,
-               m.x_min, m.x_max, m.y_min, m.y_max, m.coord_type,
-               COUNT(f.id) AS floor_count,
-               m.created_at
-        FROM maps m
-        LEFT JOIN floors f ON f.map_id = m.id
-        GROUP BY m.id
-        ORDER BY m.name
-    """)
+        await db.execute(
+            select(
+                Map.id,
+                Map.name,
+                Map.description,
+                Map.x_min,
+                Map.x_max,
+                Map.y_min,
+                Map.y_max,
+                Map.coord_type,
+                Map.created_at,
+                func.count(Floor.id).label("floor_count"),
             )
+            .outerjoin(Floor, Floor.map_id == Map.id)
+            .group_by(Map.id)
+            .order_by(Map.name)
         )
-        .mappings()
-        .all()
-    )
+    ).all()
     return [_map_row(r) for r in rows]
 
 
 @router.post("/maps", status_code=status.HTTP_201_CREATED)
 async def create_map(payload: MapCreate, db: DB, _: AdminUser):
-    row = (
-        (
-            await db.execute(
-                text("""
-            INSERT INTO maps (name, description, x_min, x_max, y_min, y_max, coord_type)
-            VALUES (:name, :description, :x_min, :x_max, :y_min, :y_max, :coord_type)
-            RETURNING id, name, COALESCE(description,'') AS description,
-                      x_min, x_max, y_min, y_max, coord_type, created_at
-        """),
-                payload.model_dump(),
-            )
-        )
-        .mappings()
-        .one()
-    )
+    m = Map(**payload.model_dump())
+    db.add(m)
     await db.commit()
-    return _map_row(row)
+    await db.refresh(m)
+    return _map_obj(m, floor_count=0)
 
 
 @router.get("/maps/{map_id}")
 async def get_map(map_id: str, db: DB, _: AdminUser):
-    row = (
-        (
-            await db.execute(
-                text("""
-            SELECT id, name, COALESCE(description,'') AS description,
-                   x_min, x_max, y_min, y_max, coord_type, created_at
-            FROM maps WHERE id = :id
-        """),
-                {"id": map_id},
-            )
-        )
-        .mappings()
-        .one_or_none()
-    )
-    if not row:
+    m = await db.get(Map, map_id)
+    if not m:
         raise HTTPException(status_code=404, detail="map not found")
 
     floors = (
-        (
-            await db.execute(
-                text("""
-            SELECT f.id, f.floor_number, COALESCE(f.label,'') AS label, f.image_url,
-                   COUNT(p.id) AS pano_count
-            FROM floors f
-            LEFT JOIN panoramas p ON p.floor_id = f.id
-            WHERE f.map_id = :map_id
-            GROUP BY f.id, f.floor_number, f.label, f.image_url
-            ORDER BY f.floor_number
-        """),
-                {"map_id": map_id},
+        await db.execute(
+            select(
+                Floor.id,
+                Floor.floor_number,
+                Floor.label,
+                Floor.image_url,
+                func.count(Panorama.id).label("pano_count"),
             )
+            .outerjoin(Panorama, Panorama.floor_id == Floor.id)
+            .where(Floor.map_id == map_id)
+            .group_by(Floor.id)
+            .order_by(Floor.floor_number)
         )
-        .mappings()
-        .all()
-    )
+    ).all()
 
-    result = _map_row(row)
+    result = _map_obj(m)
     result["floors"] = [_floor_row(f) for f in floors]
     return result
 
@@ -139,12 +108,7 @@ async def update_map(map_id: str, payload: MapUpdate, db: DB, _: AdminUser):
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="no fields to update")
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["id"] = map_id
-    result = await db.execute(
-        text(f"UPDATE maps SET {set_clause} WHERE id = :id RETURNING id"),
-        updates,
-    )
+    result = await db.execute(update(Map).where(Map.id == map_id).values(**updates).returning(Map.id))
     if not result.one_or_none():
         raise HTTPException(status_code=404, detail="map not found")
     await db.commit()
@@ -153,7 +117,7 @@ async def update_map(map_id: str, payload: MapUpdate, db: DB, _: AdminUser):
 
 @router.delete("/maps/{map_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_map(map_id: str, db: DB, _: AdminUser):
-    result = await db.execute(text("DELETE FROM maps WHERE id = :id RETURNING id"), {"id": map_id})
+    result = await db.execute(delete(Map).where(Map.id == map_id).returning(Map.id))
     if not result.one_or_none():
         raise HTTPException(status_code=404, detail="map not found")
     await db.commit()
@@ -174,15 +138,19 @@ async def add_floor(
     _: AdminUser,
     label: Annotated[str | None, Form()] = None,
 ):
-    row = (await db.execute(text("SELECT id FROM maps WHERE id = :id"), {"id": map_id})).one_or_none()
-    if not row:
+    m = await db.get(Map, map_id)
+    if not m:
         raise HTTPException(status_code=404, detail="map not found")
 
-    floor_id = str(uuid.uuid4())
     content = await image.read()
     ext = _ext(image.filename or "floor.jpg")
-    minio_key = f"maps/{map_id}/floors/{floor_id}/overlay{ext}"
 
+    # flush to get f.id before uploading to MinIO
+    f = Floor(map_id=map_id, floor_number=floor_number, label=label, image_url="placeholder")
+    db.add(f)
+    await db.flush()
+
+    minio_key = f"maps/{map_id}/floors/{f.id}/overlay{ext}"
     minio_client.put_object(
         settings.minio_bucket,
         minio_key,
@@ -190,39 +158,15 @@ async def add_floor(
         len(content),
         content_type=image.content_type or "image/jpeg",
     )
-
-    image_url = f"/{settings.minio_bucket}/{minio_key}"
-
-    floor = (
-        (
-            await db.execute(
-                text("""
-            INSERT INTO floors (id, map_id, floor_number, label, image_url)
-            VALUES (:id, :map_id, :floor_number, :label, :image_url)
-            RETURNING id, floor_number, COALESCE(label,'') AS label, image_url
-        """),
-                {
-                    "id": floor_id,
-                    "map_id": map_id,
-                    "floor_number": floor_number,
-                    "label": label,
-                    "image_url": image_url,
-                },
-            )
-        )
-        .mappings()
-        .one()
-    )
+    f.image_url = f"/{settings.minio_bucket}/{minio_key}"
     await db.commit()
-    return _floor_row(floor)
+    await db.refresh(f)
+    return _floor_obj(f)
 
 
 @router.delete("/maps/{map_id}/floors/{floor_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_floor(map_id: str, floor_id: str, db: DB, _: AdminUser):
-    result = await db.execute(
-        text("DELETE FROM floors WHERE id = :id AND map_id = :map_id RETURNING id"),
-        {"id": floor_id, "map_id": map_id},
-    )
+    result = await db.execute(delete(Floor).where(Floor.id == floor_id, Floor.map_id == map_id).returning(Floor.id))
     if not result.one_or_none():
         raise HTTPException(status_code=404, detail="floor not found")
     await db.commit()
@@ -234,28 +178,53 @@ async def delete_floor(map_id: str, floor_id: str, db: DB, _: AdminUser):
 # ──────────────────────────────────────────────
 
 
+def _map_obj(m: Map, floor_count: int = 0) -> dict:
+    return {
+        "id": str(m.id),
+        "name": m.name,
+        "description": m.description or "",
+        "x_min": m.x_min,
+        "x_max": m.x_max,
+        "y_min": m.y_min,
+        "y_max": m.y_max,
+        "coord_type": m.coord_type,
+        "floor_count": floor_count,
+        "created_at": str(m.created_at),
+    }
+
+
 def _map_row(r) -> dict:
     return {
-        "id": str(r["id"]),
-        "name": r["name"],
-        "description": r["description"],
-        "x_min": r["x_min"],
-        "x_max": r["x_max"],
-        "y_min": r["y_min"],
-        "y_max": r["y_max"],
-        "coord_type": r["coord_type"],
-        "floor_count": r.get("floor_count", 0),
-        "created_at": str(r["created_at"]),
+        "id": str(r.id),
+        "name": r.name,
+        "description": r.description or "",
+        "x_min": r.x_min,
+        "x_max": r.x_max,
+        "y_min": r.y_min,
+        "y_max": r.y_max,
+        "coord_type": r.coord_type,
+        "floor_count": r.floor_count or 0,
+        "created_at": str(r.created_at),
+    }
+
+
+def _floor_obj(f: Floor, pano_count: int = 0) -> dict:
+    return {
+        "id": str(f.id),
+        "floor_number": f.floor_number,
+        "label": f.label or "",
+        "image_url": f.image_url,
+        "pano_count": pano_count,
     }
 
 
 def _floor_row(r) -> dict:
     return {
-        "id": str(r["id"]),
-        "floor_number": r["floor_number"],
-        "label": r["label"],
-        "image_url": r["image_url"],
-        "pano_count": r.get("pano_count", 0),
+        "id": str(r.id),
+        "floor_number": r.floor_number,
+        "label": r.label or "",
+        "image_url": r.image_url,
+        "pano_count": r.pano_count or 0,
     }
 
 
@@ -264,7 +233,6 @@ def _ext(filename: str) -> str:
 
 
 def _delete_minio_prefix(prefix: str) -> None:
-    """Best-effort delete of all MinIO objects under a prefix."""
     try:
         objects = minio_client.list_objects(settings.minio_bucket, prefix=prefix, recursive=True)
         for obj in objects:

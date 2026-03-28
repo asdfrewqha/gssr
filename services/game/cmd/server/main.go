@@ -29,8 +29,10 @@ import (
 	"github.com/gssr/game/internal/config"
 	"github.com/gssr/game/internal/db"
 	_ "github.com/gssr/game/docs"
+	"github.com/gssr/game/internal/leaderboard"
 	"github.com/gssr/game/internal/maps"
 	"github.com/gssr/game/internal/room"
+	"github.com/gssr/game/internal/solo"
 	"github.com/gssr/game/internal/user"
 	"github.com/gssr/game/internal/ws"
 )
@@ -50,6 +52,11 @@ func main() {
 		log.Fatalf("valkey: %v", err)
 	}
 	defer valkey.Close()
+
+	// Seed initial admin from env if none exist.
+	if err := auth.SeedAdmin(ctx, pg, cfg.AdminUsername, cfg.AdminPassword); err != nil {
+		log.Printf("admin seed warning: %v", err)
+	}
 
 	hub := ws.NewHub()
 
@@ -85,6 +92,8 @@ func main() {
 	authGroup := api.Group("/auth")
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/login", authHandler.Login)
+	authGroup.Post("/admin-login", authHandler.AdminLogin)
+	authGroup.Get("/verify-email", authHandler.VerifyEmail)
 	authGroup.Post("/refresh", authHandler.Refresh)
 	authGroup.Post("/logout", auth.Required(cfg.JWTSecret), authHandler.Logout)
 
@@ -108,6 +117,21 @@ func main() {
 	rooms.Post("/:id/start", roomHandler.Start)
 	rooms.Post("/:id/guess", roomHandler.Guess)
 	rooms.Get("/:id/livekit-token", roomHandler.LiveKitToken)
+
+	// Leaderboard + public profiles (public)
+	lbHandler := leaderboard.NewHandler(pg)
+	api.Get("/leaderboard", lbHandler.List)
+	api.Get("/users/:id/profile", lbHandler.Profile)
+
+	// Solo play (auth-required)
+	soloHandler := solo.NewHandler(pg, valkey)
+	soloGroup := api.Group("/solo", auth.Required(cfg.JWTSecret))
+	soloGroup.Post("/start", soloHandler.Start)
+	soloGroup.Get("/history", soloHandler.History)
+	soloGroup.Get("/:id", soloHandler.GetSession)
+	soloGroup.Post("/:id/guess", soloHandler.Guess)
+	soloGroup.Get("/:id/result", soloHandler.Result)
+	soloGroup.Post("/:id/abandon", soloHandler.Abandon)
 
 	// WebSocket: run auth middleware first, then upgrade
 	app.Use("/ws/rooms/:id", auth.Required(cfg.JWTSecret), func(c *fiber.Ctx) error {

@@ -13,13 +13,7 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      await api.post("/api/auth/login", form);
-      // Verify admin access
-      const me = await api.get<{ is_admin: boolean }>("/api/users/me");
-      if (!me.data.is_admin) {
-        setError("Access denied — admin only.");
-        return;
-      }
+      await api.post("/api/auth/admin-login", form);
       navigate("/dashboard");
     } catch (err) {
       setError(

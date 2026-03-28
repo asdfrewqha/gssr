@@ -7,6 +7,8 @@ import MapDetail from "./pages/MapDetail";
 import Maps from "./pages/Maps";
 import Panoramas from "./pages/Panoramas";
 import Users from "./pages/Users";
+import UserSearch from "./pages/UserSearch";
+import AdminManagement from "./pages/AdminManagement";
 
 export default function App() {
   return (
@@ -25,6 +27,8 @@ export default function App() {
           <Route path="/maps" element={<Maps />} />
           <Route path="/maps/:id" element={<MapDetail />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/user-search" element={<UserSearch />} />
+          <Route path="/admins" element={<AdminManagement />} />
           <Route path="/panoramas" element={<Panoramas />} />
         </Route>
       </Routes>

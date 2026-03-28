@@ -52,3 +52,8 @@ func AdminRequired(secret []byte) fiber.Handler {
 func UserID(c *fiber.Ctx) uuid.UUID {
 	return c.Locals(ctxUserID).(uuid.UUID)
 }
+
+func IsAdmin(c *fiber.Ctx) bool {
+	v, _ := c.Locals(ctxIsAdmin).(bool)
+	return v
+}

@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     admin_jwt_secret: str
     cors_origins: str = "http://localhost:5174"
 
+    # SMTP for email verification (empty = disabled)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@gssr.school"
+    frontend_url: str = "http://localhost:5173"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

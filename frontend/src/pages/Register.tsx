@@ -4,9 +4,10 @@ import client from "../api/client";
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ username: "", password: "" });
+  const [form, setForm] = useState({ username: "", password: "", email: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,9 +15,7 @@ export default function Register() {
     setError("");
     try {
       await client.post("/api/auth/register", form);
-      // Auto-login after register
-      await client.post("/api/auth/login", form);
-      navigate("/");
+      setDone(true);
     } catch (err) {
       setError(
         (err as { response?: { data?: { error?: string } } }).response?.data
@@ -26,6 +25,40 @@ export default function Register() {
       setLoading(false);
     }
   };
+
+  if (done) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="bg-gray-800 p-8 rounded-xl w-full max-w-sm space-y-4 text-center">
+          <div className="text-4xl">✉️</div>
+          <h1 className="text-xl font-bold text-white">Check your email</h1>
+          <p className="text-gray-400 text-sm">
+            We sent a verification link to{" "}
+            <span className="text-indigo-400">{form.email}</span>. Click it to
+            activate your account.
+          </p>
+          <p className="text-gray-500 text-xs">
+            You can play solo before verifying, but you won't appear on the
+            leaderboard until confirmed.
+          </p>
+          <button
+            onClick={() => {
+              client
+                .post("/api/auth/login", {
+                  username: form.username,
+                  password: form.password,
+                })
+                .then(() => navigate("/"))
+                .catch(() => navigate("/login"));
+            }}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded py-2 transition-colors"
+          >
+            Continue to app
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -45,6 +78,15 @@ export default function Register() {
           onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
           required
           autoComplete="username"
+        />
+        <input
+          type="email"
+          className="w-full bg-gray-700 text-white rounded px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Email address"
+          value={form.email}
+          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          required
+          autoComplete="email"
         />
         <input
           type="password"
