@@ -214,11 +214,12 @@ jobs:
               printf 'SMTP_FROM=%s\n'              "${SMTP_FROM:-noreply@${DOMAIN}}"
             } > infra/compose/.env
 
-            if [ "${FULL_DEPLOY}" = "true" ]; then
-              # Full deploy: update nginx config, certs, livekit, bring up everything
-              envsubst '${DOMAIN}' < infra/nginx/upstream.conf > infra/nginx/upstream_sub.conf
-              mv infra/nginx/upstream_sub.conf infra/nginx/upstream.conf
+            # Substitute ${DOMAIN} in nginx config (always — tar overwrites it each deploy)
+            envsubst '${DOMAIN}' < infra/nginx/upstream.conf > infra/nginx/upstream_sub.conf
+            mv infra/nginx/upstream_sub.conf infra/nginx/upstream.conf
 
+            if [ "${FULL_DEPLOY}" = "true" ]; then
+              # Full deploy: update certs, livekit, bring up everything
               mkdir -p infra/nginx/ssl
               printf '%s' "${ORIGIN_CERT}" | base64 -d > infra/nginx/ssl/origin.pem
               printf '%s' "${ORIGIN_KEY}"  | base64 -d > infra/nginx/ssl/origin.key
