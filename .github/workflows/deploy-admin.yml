@@ -22,7 +22,7 @@ jobs:
         run: npm ci && npm run build
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
-          VITE_MINIO_URL: ${{ vars.VITE_MINIO_URL }}
+          VITE_S3_URL: ${{ vars.VITE_S3_URL }}
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

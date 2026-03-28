@@ -229,7 +229,11 @@ export default function PlayGame() {
       {(showMap || phase === "result") && (
         <div className="absolute bottom-16 right-4 w-72 h-52 z-20 rounded-xl overflow-hidden shadow-2xl border border-gray-600">
           <GuessMap
-            floorImageUrl={activeFloor?.image_url ?? ""}
+            floorImageUrl={
+              activeFloor
+                ? `${import.meta.env.VITE_S3_URL ?? ""}${activeFloor.image_url}`
+                : ""
+            }
             onGuess={(x, y) => {
               if (phase === "guessing") setPendingGuess({ x, y });
             }}

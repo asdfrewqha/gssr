@@ -241,11 +241,16 @@ jobs:
             fi
 
             # Run database migrations (always)
+            # goose-bin/goose-mod volumes cache the binary + modules — no re-download after first deploy
             docker run --rm \
               --network gssr_default \
-              -v "$(pwd)/migrations:/migrations" \
+              -v "$(pwd)/migrations:/migrations:ro" \
+              -v gssr_goose_bin:/tmp/go \
+              -v gssr_goose_mod:/tmp/gomod \
+              -e GOPATH=/tmp/go \
+              -e GOMODCACHE=/tmp/gomod \
               -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
               golang:1.22-alpine \
-              sh -c 'go install github.com/pressly/goose/v3/cmd/goose@v3.20.0 && goose -dir /migrations postgres "postgres://gssr:${POSTGRES_PASSWORD}@postgres:5432/gssr?sslmode=disable" up'
+              sh -c '[ -f /tmp/go/bin/goose ] || go install github.com/pressly/goose/v3/cmd/goose@v3.20.0; /tmp/go/bin/goose -dir /migrations postgres "postgres://gssr:${POSTGRES_PASSWORD}@postgres:5432/gssr?sslmode=disable" up'
 
             echo "Deploy complete (full=${FULL_DEPLOY})"

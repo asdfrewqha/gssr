@@ -71,8 +71,8 @@ export default function Panoramas() {
   };
 
   const previewUrl = (panoId: string) => {
-    const base = import.meta.env.VITE_MINIO_URL || "";
-    return `${base}/raw/${panoId}.jpg`;
+    const base = import.meta.env.VITE_S3_URL || "";
+    return `${base}/gssr-panoramas/raw/${panoId}.jpg`;
   };
 
   return (

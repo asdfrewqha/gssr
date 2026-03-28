@@ -59,7 +59,7 @@ export function PanoramaViewer({ panoId }: Props) {
     lastTouch.current = { x: t.clientX, y: t.clientY };
   };
 
-  const minioUrl = import.meta.env.VITE_MINIO_URL ?? "";
+  const s3Url = import.meta.env.VITE_S3_URL ?? "";
 
   return (
     <div
@@ -73,7 +73,7 @@ export function PanoramaViewer({ panoId }: Props) {
       onTouchMove={onTouchMove}
     >
       <img
-        src={`${minioUrl}/raw/${panoId}.jpg`}
+        src={`${s3Url}/gssr-panoramas/raw/${panoId}.jpg`}
         className="h-full w-auto max-w-none pointer-events-none"
         alt=""
         draggable={false}
