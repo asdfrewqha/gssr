@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, or_, select, update
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import delete, func, or_, select, update
 
 from app.api.deps import DB, AdminUser
 from app.models import Guess, User
@@ -92,6 +92,14 @@ async def unban_user(user_id: str, db: DB, _: AdminUser):
         raise HTTPException(status_code=404, detail="user not found")
     await db.commit()
     return {"id": user_id, "banned": False}
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: str, db: DB, _: AdminUser):
+    result = await db.execute(delete(User).where(User.id == user_id).returning(User.id))
+    if not result.one_or_none():
+        raise HTTPException(status_code=404, detail="user not found")
+    await db.commit()
 
 
 @router.get("/stats")

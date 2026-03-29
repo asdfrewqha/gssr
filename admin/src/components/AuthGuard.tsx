@@ -37,7 +37,15 @@ export default function AuthGuard({ children }: Props) {
   if (state === "forbidden") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <p className="text-red-400">Access denied — admin only.</p>
+        <div className="text-center space-y-3">
+          <p className="text-red-400">You are logged in as a regular user.</p>
+          <a
+            href="#/login"
+            className="text-indigo-400 hover:text-indigo-300 text-sm underline"
+          >
+            Go to Admin Login →
+          </a>
+        </div>
       </div>
     );
   }

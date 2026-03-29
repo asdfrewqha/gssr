@@ -63,13 +63,18 @@ export default function MapDetail() {
   // Pano upload
   const [selectedFloor, setSelectedFloor] = useState("");
   const [panoForm, setPanoForm] = useState({
-    x: "0",
-    y: "0",
+    x: "0.5",
+    y: "0.5",
     north_offset: "0",
   });
   const [panoFile, setPanoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadStep, setUploadStep] = useState<
+    "idle" | "uploading" | "tiling" | "done" | "failed"
+  >("idle");
+  const [tilingPanoId, setTilingPanoId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const floorImgRef = useRef<HTMLImageElement>(null);
 
   const loadMap = () =>
     api.get<MapDetail>(`/admin/maps/${id}`).then((r) => {
@@ -143,26 +148,81 @@ export default function MapDetail() {
     e.preventDefault();
     if (!panoFile || !selectedFloor) return;
     setUploading(true);
-    const fd = new FormData();
-    fd.append("floor_id", selectedFloor);
-    fd.append("x", panoForm.x);
-    fd.append("y", panoForm.y);
-    fd.append("north_offset", panoForm.north_offset);
-    fd.append("image", panoFile);
+    setUploadStep("uploading");
+    setError("");
     try {
-      await api.post("/admin/panoramas", fd);
+      // Step 1: get presigned URL + create DB record
+      const { data } = await api.get<{ pano_id: string; upload_url: string }>(
+        "/admin/panoramas/upload-url",
+        {
+          params: {
+            floor_id: selectedFloor,
+            x: panoForm.x,
+            y: panoForm.y,
+            north_offset: panoForm.north_offset,
+          },
+        },
+      );
+
+      // Step 2: PUT file directly to MinIO (no auth headers needed — presigned)
+      const putRes = await fetch(data.upload_url, {
+        method: "PUT",
+        body: panoFile,
+        headers: { "Content-Type": "image/jpeg" },
+      });
+      if (!putRes.ok) throw new Error(`MinIO PUT failed: ${putRes.status}`);
+
+      // Step 3: trigger tiling + NSFW tasks
+      await api.post("/admin/panoramas/confirm-upload", {
+        pano_id: data.pano_id,
+      });
+
       setPanoFile(null);
       if (fileRef.current) fileRef.current.value = "";
-      setPanoForm({ x: "0", y: "0", north_offset: "0" });
+      setPanoForm({ x: "0.5", y: "0.5", north_offset: "0" });
+      setTilingPanoId(data.pano_id);
+      setUploadStep("tiling");
       loadPanos();
+
+      // Poll tile_status every 2s
+      const poll = setInterval(async () => {
+        try {
+          const r = await api.get<{ tile_status: string }>(
+            `/admin/panoramas/${data.pano_id}`,
+          );
+          if (r.data.tile_status === "tiled") {
+            setUploadStep("done");
+            clearInterval(poll);
+            loadPanos();
+          } else if (r.data.tile_status === "failed") {
+            setUploadStep("failed");
+            clearInterval(poll);
+            loadPanos();
+          }
+        } catch {
+          clearInterval(poll);
+        }
+      }, 2000);
     } catch (err) {
       setError(
         (err as { response?: { data?: { detail?: string } } }).response?.data
-          ?.detail ?? "Upload failed",
+          ?.detail ??
+          (err as Error).message ??
+          "Upload failed",
       );
+      setUploadStep("failed");
     } finally {
       setUploading(false);
     }
+  };
+
+  const onFloorImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    const img = floorImgRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width).toFixed(3);
+    const y = ((e.clientY - rect.top) / rect.height).toFixed(3);
+    setPanoForm((f) => ({ ...f, x, y }));
   };
 
   const deletePano = async (panoId: string) => {
@@ -242,9 +302,16 @@ export default function MapDetail() {
           {map.floors.map((f) => (
             <div
               key={f.id}
-              className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex justify-between items-start"
+              className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex justify-between items-start gap-3"
             >
-              <div>
+              {f.image_url && (
+                <img
+                  src={`${import.meta.env.VITE_S3_URL}${f.image_url}`}
+                  alt={`Floor ${f.floor_number}`}
+                  className="w-16 h-16 object-cover rounded border border-gray-700 shrink-0"
+                />
+              )}
+              <div className="flex-1">
                 <p className="font-medium text-white">
                   Floor {f.floor_number}
                   {f.label && f.label !== String(f.floor_number)
@@ -257,7 +324,7 @@ export default function MapDetail() {
               </div>
               <button
                 onClick={() => deleteFloor(f.id)}
-                className="text-red-500 hover:text-red-400 text-xs"
+                className="text-red-500 hover:text-red-400 text-xs shrink-0"
               >
                 Delete
               </button>
@@ -328,6 +395,19 @@ export default function MapDetail() {
             className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3"
           >
             {error && <p className="text-red-400 text-sm">{error}</p>}
+            {uploadStep === "tiling" && (
+              <p className="text-yellow-400 text-sm">
+                Tiling in progress… ({tilingPanoId?.slice(0, 8)})
+              </p>
+            )}
+            {uploadStep === "done" && (
+              <p className="text-green-400 text-sm">Tiling complete.</p>
+            )}
+            {uploadStep === "failed" && (
+              <p className="text-red-400 text-sm">
+                Tiling failed — check Celery logs.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-400">Floor</label>
@@ -358,33 +438,73 @@ export default function MapDetail() {
                   }
                 />
               </div>
-              <div>
-                <label className="text-xs text-gray-400">X</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="mt-1 w-full bg-gray-800 text-white rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={panoForm.x}
-                  onChange={(e) =>
-                    setPanoForm((f) => ({ ...f, x: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Y</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="mt-1 w-full bg-gray-800 text-white rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={panoForm.y}
-                  onChange={(e) =>
-                    setPanoForm((f) => ({ ...f, y: e.target.value }))
-                  }
-                  required
-                />
-              </div>
             </div>
+
+            {/* Click-to-place on floor plan */}
+            {(() => {
+              const floor = map.floors.find((f) => f.id === selectedFloor);
+              return floor?.image_url ? (
+                <div>
+                  <label className="text-xs text-gray-400">
+                    Click on floor plan to place panorama
+                    <span className="ml-2 text-gray-500">
+                      (x={Number(panoForm.x).toFixed(3)}, y=
+                      {Number(panoForm.y).toFixed(3)})
+                    </span>
+                  </label>
+                  <div className="mt-1 relative inline-block cursor-crosshair">
+                    <img
+                      ref={floorImgRef}
+                      src={`${import.meta.env.VITE_S3_URL}${floor.image_url}`}
+                      alt="Floor plan"
+                      className="max-w-full max-h-64 rounded border border-gray-700"
+                      onClick={onFloorImageClick}
+                    />
+                    <div
+                      className="absolute w-3 h-3 bg-indigo-500 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                      style={{
+                        left: `${Number(panoForm.x) * 100}%`,
+                        top: `${Number(panoForm.y) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400">X (0–1)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      max="1"
+                      className="mt-1 w-full bg-gray-800 text-white rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={panoForm.x}
+                      onChange={(e) =>
+                        setPanoForm((f) => ({ ...f, x: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400">Y (0–1)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      max="1"
+                      className="mt-1 w-full bg-gray-800 text-white rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={panoForm.y}
+                      onChange={(e) =>
+                        setPanoForm((f) => ({ ...f, y: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
             <div>
               <label className="text-xs text-gray-400">
                 Equirectangular JPEG
@@ -403,7 +523,11 @@ export default function MapDetail() {
               disabled={uploading || !panoFile}
               className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded disabled:opacity-50 transition-colors"
             >
-              {uploading ? "Uploading…" : "Upload"}
+              {uploading
+                ? uploadStep === "uploading"
+                  ? "Uploading to MinIO…"
+                  : "Starting tiling…"
+                : "Upload"}
             </button>
           </form>
         )}

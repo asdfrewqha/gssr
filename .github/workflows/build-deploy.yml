@@ -184,6 +184,7 @@ jobs:
               printf 'MINIO_ACCESS_KEY=gssr\n'
               printf 'MINIO_SECRET_KEY=%s\n'       "${MINIO_ROOT_PASSWORD}"
               printf 'MINIO_ENDPOINT=minio:9000\n'
+              printf 'MINIO_PUBLIC_URL=https://api.%s/s3\n' "${DOMAIN}"
               printf 'MINIO_BUCKET_PANORAMAS=gssr-panoramas\n'
               printf 'MINIO_BUCKET_FLOORS=gssr-floors\n'
               printf 'MINIO_BUCKET_AVATARS=gssr-avatars\n'

@@ -57,17 +57,13 @@ def moderate_panorama(self, pano_id: str):
 
         os.unlink(tmp_path)
 
-        status = "flagged" if nsfw_score > settings.nsfw_threshold else "clean"
-        logger.info("Panorama %s moderation: %s (score=%.3f)", pano_id, status, nsfw_score)
+        flagged = nsfw_score > settings.nsfw_threshold
+        logger.info("Panorama %s NSFW score=%.3f%s", pano_id, nsfw_score, " [HIGH]" if flagged else "")
 
         with sync_engine.begin() as conn:
             conn.execute(
-                text("""
-                    UPDATE panoramas
-                    SET moderation_status = :status, nsfw_score = :score
-                    WHERE id = :id
-                """),
-                {"status": status, "score": float(nsfw_score), "id": pano_id},
+                text("UPDATE panoramas SET nsfw_score = :score WHERE id = :id"),
+                {"score": float(nsfw_score), "id": pano_id},
             )
 
     except Exception as exc:

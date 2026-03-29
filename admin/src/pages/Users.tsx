@@ -1,135 +1,206 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/adminClient";
 
 interface User {
   id: string;
   username: string;
+  email: string;
+  email_verified: boolean;
   elo: number;
+  xp: number;
   banned: boolean;
-  is_admin: boolean;
   created_at: string;
 }
 
-interface UserList {
-  page: number;
-  per_page: number;
-  total: number;
-  items: User[];
-}
+const STATUS_FILTERS = ["all", "active", "banned", "unverified"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 export default function Users() {
-  const [data, setData] = useState<UserList | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const perPage = 50;
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = (p: number) => {
+  const load = (s: string, f: StatusFilter, p: number) => {
     setLoading(true);
     api
-      .get<UserList>("/admin/users", { params: { page: p, per_page: 50 } })
-      .then((r) => setData(r.data))
+      .get<{ items: User[]; total: number }>("/admin/users", {
+        params: {
+          search: s || undefined,
+          user_status: f === "all" ? undefined : f,
+          page: p,
+          per_page: perPage,
+        },
+      })
+      .then((r) => {
+        setUsers(r.data.items);
+        setTotal(r.data.total);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    load(page);
-  }, [page]);
+    load(search, statusFilter, page);
+  }, [statusFilter, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ban = async (id: string, ban: boolean) => {
-    await api.put(`/admin/users/${id}/${ban ? "ban" : "unban"}`);
-    load(page);
+  const onSearchChange = (v: string) => {
+    setSearch(v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPage(1);
+      load(v, statusFilter, 1);
+    }, 300);
   };
 
-  const totalPages = data ? Math.ceil(data.total / data.per_page) : 1;
+  const onFilterChange = (f: StatusFilter) => {
+    setStatusFilter(f);
+    setPage(1);
+  };
+
+  const ban = async (id: string, banned: boolean) => {
+    await api.put(`/admin/users/${id}/${banned ? "unban" : "ban"}`);
+    load(search, statusFilter, page);
+  };
+
+  const deleteUser = async (id: string, username: string) => {
+    if (
+      !confirm(`Delete user "${username}" permanently? This cannot be undone.`)
+    )
+      return;
+    await api.delete(`/admin/users/${id}`);
+    load(search, statusFilter, page);
+  };
+
+  const totalPages = Math.ceil(total / perPage);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-6xl">
       <h1 className="text-2xl font-bold text-white">Users</h1>
-      {loading && <p className="text-gray-400 text-sm">Loading…</p>}
-      {data && (
-        <>
-          <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-400 text-left">
-                  <th className="px-4 py-3 font-medium">Username</th>
-                  <th className="px-4 py-3 font-medium">ELO</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Joined</th>
-                  <th className="px-4 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((u) => (
-                  <tr
-                    key={u.id}
-                    className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${u.banned ? "opacity-50" : ""}`}
-                  >
-                    <td className="px-4 py-3 font-medium text-white">
-                      {u.username}
-                    </td>
-                    <td className="px-4 py-3 text-gray-300">{u.elo}</td>
-                    <td className="px-4 py-3">
-                      {u.is_admin ? (
-                        <span className="text-indigo-400 text-xs font-medium">
-                          admin
-                        </span>
-                      ) : (
-                        <span className="text-gray-500 text-xs">user</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {u.banned ? (
-                        <span className="text-red-400 text-xs">banned</span>
-                      ) : (
-                        <span className="text-green-400 text-xs">active</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">
-                      {new Date(u.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {!u.is_admin && (
-                        <button
-                          onClick={() => ban(u.id, !u.banned)}
-                          className={`text-xs ${
-                            u.banned
-                              ? "text-green-500 hover:text-green-400"
-                              : "text-red-500 hover:text-red-400"
-                          }`}
-                        >
-                          {u.banned ? "Unban" : "Ban"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center gap-3 text-sm">
-              <button
-                onClick={() => setPage((p) => p - 1)}
-                disabled={page === 1}
-                className="text-gray-400 hover:text-white disabled:opacity-30"
-              >
-                ← Prev
-              </button>
-              <span className="text-gray-400">
-                {page} / {totalPages} ({data.total} users)
-              </span>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page === totalPages}
-                className="text-gray-400 hover:text-white disabled:opacity-30"
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </>
+      {/* Search + filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <input
+          type="text"
+          placeholder="Search by username or email…"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="bg-gray-800 text-white text-sm rounded px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+        />
+        <div className="flex gap-1">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => onFilterChange(f)}
+              className={`px-3 py-1.5 text-xs rounded capitalize transition-colors ${
+                statusFilter === f
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-gray-500 ml-auto">{total} users</span>
+      </div>
+
+      {/* Table */}
+      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+        {loading ? (
+          <p className="text-gray-400 p-6 text-sm">Loading…</p>
+        ) : users.length === 0 ? (
+          <p className="text-gray-500 p-6 text-sm">No users found.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-400 text-left">
+                <th className="px-4 py-3 font-medium">Username</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">ELO</th>
+                <th className="px-4 py-3 font-medium">XP</th>
+                <th className="px-4 py-3 font-medium">Verified</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Joined</th>
+                <th className="px-4 py-3 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr
+                  key={u.id}
+                  className="border-b border-gray-800/50 hover:bg-gray-800/30"
+                >
+                  <td className="px-4 py-2 font-medium text-white">
+                    {u.username}
+                  </td>
+                  <td className="px-4 py-2 text-gray-400 text-xs">
+                    {u.email ?? "—"}
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">{u.elo}</td>
+                  <td className="px-4 py-2 text-gray-300">{u.xp}</td>
+                  <td className="px-4 py-2">
+                    {u.email_verified ? (
+                      <span className="text-green-400 text-xs">verified</span>
+                    ) : (
+                      <span className="text-yellow-500 text-xs">pending</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    {u.banned ? (
+                      <span className="text-red-400 text-xs">banned</span>
+                    ) : (
+                      <span className="text-green-400 text-xs">active</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-gray-500 text-xs">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-2 text-right space-x-3">
+                    <button
+                      onClick={() => ban(u.id, u.banned)}
+                      className={`text-xs ${u.banned ? "text-green-500 hover:text-green-400" : "text-yellow-500 hover:text-yellow-400"}`}
+                    >
+                      {u.banned ? "Unban" : "Ban"}
+                    </button>
+                    <button
+                      onClick={() => deleteUser(u.id, u.username)}
+                      className="text-xs text-red-500 hover:text-red-400"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex gap-2 justify-center">
+          <button
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+            className="px-3 py-1 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-40 hover:bg-gray-700"
+          >
+            ← Prev
+          </button>
+          <span className="px-3 py-1 text-sm text-gray-400">
+            {page} / {totalPages}
+          </span>
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+            className="px-3 py-1 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-40 hover:bg-gray-700"
+          >
+            Next →
+          </button>
+        </div>
       )}
     </div>
   );

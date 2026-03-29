@@ -1,5 +1,6 @@
 """Celery tasks for transactional email (verification, etc.)."""
 
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -7,11 +8,12 @@ from email.mime.text import MIMEText
 from app.config import settings
 from app.tasks.celery_app import celery_app
 
+logger = logging.getLogger(__name__)
+
 
 def _send_smtp(to: str, subject: str, html: str) -> None:
     if not settings.smtp_host:
-        # SMTP not configured — log and skip silently in dev
-        print(f"[email] SMTP not configured — skipping email to {to}: {subject}")
+        logger.info("SMTP not configured — skipping email to %s: %s", to, subject)
         return
 
     msg = MIMEMultipart("alternative")

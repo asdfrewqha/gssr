@@ -10,6 +10,7 @@ celery_app = Celery(
         "app.tasks.tiling",
         "app.tasks.moderation",
         "app.tasks.elo",
+        "app.tasks.email",
     ],
 )
 
@@ -22,4 +23,5 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    broker_connection_retry_on_startup=True,
 )

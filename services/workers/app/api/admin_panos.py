@@ -1,9 +1,10 @@
 import contextlib
-import io
 import uuid
-from typing import Annotated
+from datetime import timedelta
+from urllib.parse import urlparse, urlunparse
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import delete, select, update
 
 from app.api.deps import DB, AdminUser
@@ -15,47 +16,69 @@ router = APIRouter(tags=["admin-panoramas"])
 
 
 # ──────────────────────────────────────────────
-# Upload
+# Upload — two-step presigned flow
 # ──────────────────────────────────────────────
 
 
-@router.post("/panoramas", status_code=status.HTTP_201_CREATED)
-async def upload_panorama(
-    floor_id: Annotated[str, Form()],
-    x: Annotated[float, Form()],
-    y: Annotated[float, Form()],
-    image: Annotated[UploadFile, File()],
+@router.get("/panoramas/upload-url", status_code=status.HTTP_201_CREATED)
+async def get_upload_url(
+    floor_id: str,
+    x: float,
+    y: float,
     db: DB,
     _: AdminUser,
-    north_offset: Annotated[float, Form()] = 0.0,
+    north_offset: float = 0.0,
 ):
-    """Upload equirectangular panorama → MinIO raw/ → dispatch tiling + moderation."""
+    """Step 1: create panorama record + return presigned PUT URL for direct browser→MinIO upload."""
     f = await db.get(Floor, floor_id)
     if not f:
         raise HTTPException(status_code=404, detail="floor not found")
 
     pano_id = str(uuid.uuid4())
-    content = await image.read()
 
-    minio_client.put_object(
+    presigned = minio_client.presigned_put_object(
         settings.minio_bucket_panoramas,
         f"raw/{pano_id}.jpg",
-        io.BytesIO(content),
-        len(content),
-        content_type="image/jpeg",
+        expires=timedelta(hours=1),
     )
 
-    p = Panorama(id=pano_id, floor_id=floor_id, x=x, y=y, north_offset=north_offset)
+    # Replace internal Docker endpoint with public-facing MinIO URL
+    parsed = urlparse(presigned)
+    pub = urlparse(settings.minio_public_url)
+    upload_url = urlunparse(parsed._replace(scheme=pub.scheme, netloc=pub.netloc))
+
+    p = Panorama(
+        id=pano_id,
+        floor_id=floor_id,
+        x=x,
+        y=y,
+        north_offset=north_offset,
+        moderation_status="clean",
+    )
     db.add(p)
     await db.commit()
+
+    return {"pano_id": pano_id, "upload_url": upload_url}
+
+
+class _ConfirmUpload(BaseModel):
+    pano_id: str
+
+
+@router.post("/panoramas/confirm-upload", status_code=status.HTTP_202_ACCEPTED)
+async def confirm_upload(body: _ConfirmUpload, db: DB, _: AdminUser):
+    """Step 2: called after browser PUT succeeds — dispatches tiling + NSFW score tasks."""
+    p = await db.get(Panorama, body.pano_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="panorama not found")
 
     from app.tasks.moderation import moderate_panorama
     from app.tasks.tiling import tile_panorama
 
-    tile_panorama.delay(pano_id)
-    moderate_panorama.delay(pano_id)
+    tile_panorama.delay(body.pano_id)
+    moderate_panorama.delay(body.pano_id)
 
-    return {"id": pano_id, "tile_status": "pending", "moderation_status": "pending"}
+    return {"pano_id": body.pano_id, "tile_status": "pending"}
 
 
 # ──────────────────────────────────────────────

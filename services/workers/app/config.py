@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     minio_bucket_floors: str = "gssr-floors"
     minio_bucket_avatars: str = "gssr-avatars"
     minio_secure: bool = False
+    # Public-facing MinIO URL (used in presigned upload URLs returned to browser)
+    minio_public_url: str = "http://localhost:9000"
 
     nsfw_model_path: str = "models/nsfw.onnx"
     nsfw_threshold: float = 0.7

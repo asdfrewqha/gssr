@@ -6,7 +6,6 @@ const links = [
   { to: "/maps", label: "Maps" },
   { to: "/panoramas", label: "Panoramas" },
   { to: "/users", label: "Users" },
-  { to: "/user-search", label: "User Search" },
   { to: "/admins", label: "Admins" },
 ];
 

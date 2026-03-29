@@ -17,6 +17,7 @@ interface Pano {
 
 const STATUS_COLOR: Record<string, string> = {
   tiled: "text-green-400",
+  tiling: "text-blue-400",
   pending: "text-yellow-400",
   failed: "text-red-400",
   clean: "text-green-400",
@@ -24,23 +25,21 @@ const STATUS_COLOR: Record<string, string> = {
   rejected: "text-red-400",
 };
 
-type Tab = "pending" | "all";
+type Tab = "flagged" | "all";
 
 export default function Panoramas() {
-  const [tab, setTab] = useState<Tab>("pending");
+  const [tab, setTab] = useState<Tab>("flagged");
   const [panos, setPanos] = useState<Pano[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modStatus, setModStatus] = useState("");
   const [tileStatus, setTileStatus] = useState("");
 
   const load = () => {
     setLoading(true);
     const req =
-      tab === "pending"
+      tab === "flagged"
         ? api.get<Pano[]>("/admin/panoramas/pending")
         : api.get<Pano[]>("/admin/panoramas", {
             params: {
-              moderation_status: modStatus || undefined,
               tile_status: tileStatus || undefined,
               per_page: 200,
             },
@@ -50,12 +49,8 @@ export default function Panoramas() {
 
   useEffect(() => {
     load();
-  }, [tab, modStatus, tileStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, tileStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const approve = async (id: string) => {
-    await api.post(`/admin/panoramas/${id}/approve`);
-    load();
-  };
   const reject = async (id: string) => {
     await api.post(`/admin/panoramas/${id}/reject`);
     load();
@@ -81,7 +76,7 @@ export default function Panoramas() {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {(["pending", "all"] as Tab[]).map((t) => (
+        {(["flagged", "all"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -91,28 +86,14 @@ export default function Panoramas() {
                 : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
           >
-            {t === "pending" ? "Pending Review" : "All Panoramas"}
+            {t === "flagged" ? "High NSFW Score" : "All Panoramas"}
           </button>
         ))}
       </div>
 
-      {/* Filters for "all" tab */}
+      {/* Tile status filter for "all" tab */}
       {tab === "all" && (
         <div className="flex gap-3 text-sm">
-          <div>
-            <label className="text-xs text-gray-400 block">Moderation</label>
-            <select
-              className="mt-1 bg-gray-800 text-white rounded px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
-              value={modStatus}
-              onChange={(e) => setModStatus(e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="pending">Pending</option>
-              <option value="clean">Clean</option>
-              <option value="flagged">Flagged</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
           <div>
             <label className="text-xs text-gray-400 block">Tile status</label>
             <select
@@ -122,6 +103,7 @@ export default function Panoramas() {
             >
               <option value="">All</option>
               <option value="pending">Pending</option>
+              <option value="tiling">Tiling</option>
               <option value="tiled">Tiled</option>
               <option value="failed">Failed</option>
             </select>
@@ -133,8 +115,8 @@ export default function Panoramas() {
 
       {!loading && panos.length === 0 && (
         <p className="text-gray-500 text-sm">
-          {tab === "pending"
-            ? "No panoramas pending review."
+          {tab === "flagged"
+            ? "No high-NSFW panoramas."
             : "No panoramas found."}
         </p>
       )}
@@ -162,47 +144,33 @@ export default function Panoramas() {
                 >
                   {p.tile_status}
                 </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded bg-gray-900/80 ${STATUS_COLOR[p.moderation_status] ?? "text-gray-400"}`}
-                >
-                  {p.moderation_status}
-                </span>
               </div>
             </div>
 
             {/* Info */}
             <div className="p-3 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs font-mono text-gray-400">
-                    {p.id.slice(0, 16)}…
-                  </p>
-                  <p className="text-sm text-white font-medium">{p.map_name}</p>
-                  <p className="text-xs text-gray-400">
-                    Floor {p.floor_number} · ({p.x.toFixed(1)}, {p.y.toFixed(1)}
-                    )
-                    {p.nsfw_score != null && (
-                      <span
-                        className={p.nsfw_score > 0.5 ? " text-orange-400" : ""}
-                      >
-                        {" "}
-                        · NSFW {(p.nsfw_score * 100).toFixed(0)}%
-                      </span>
-                    )}
-                  </p>
-                </div>
+              <div>
+                <p className="text-xs font-mono text-gray-400">
+                  {p.id.slice(0, 16)}…
+                </p>
+                <p className="text-sm text-white font-medium">{p.map_name}</p>
+                <p className="text-xs text-gray-400">
+                  Floor {p.floor_number} · ({p.x.toFixed(2)}, {p.y.toFixed(2)})
+                  {p.nsfw_score != null && (
+                    <span
+                      className={
+                        p.nsfw_score > 0.5 ? " text-orange-400 font-medium" : ""
+                      }
+                    >
+                      {" "}
+                      · NSFW {(p.nsfw_score * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </p>
               </div>
 
               {/* Actions */}
               <div className="flex gap-2 flex-wrap">
-                {p.moderation_status !== "clean" && (
-                  <button
-                    onClick={() => approve(p.id)}
-                    className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded transition-colors"
-                  >
-                    Approve
-                  </button>
-                )}
                 {p.moderation_status !== "rejected" && (
                   <button
                     onClick={() => reject(p.id)}
