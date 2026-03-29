@@ -145,10 +145,9 @@ jobs:
           GRAFANA_PASSWORD:    ${{ secrets.GRAFANA_PASSWORD }}
           DOCKERHUB_USERNAME:  ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN:     ${{ secrets.DOCKERHUB_TOKEN }}
-          DOMAIN:              ${{ vars.DOMAIN }}
-          ORIGIN_CERT:         ${{ secrets.ORIGIN_CERT }}
-          ORIGIN_KEY:          ${{ secrets.ORIGIN_KEY }}
-          PGADMIN_PASSWORD:    ${{ secrets.PGADMIN_PASSWORD }}
+          DOMAIN:                ${{ vars.DOMAIN }}
+          CLOUDFLARE_API_TOKEN:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PGADMIN_PASSWORD:      ${{ secrets.PGADMIN_PASSWORD }}
           ADMIN_USERNAME:      ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD:      ${{ secrets.ADMIN_PASSWORD }}
           SMTP_HOST:           ${{ secrets.SMTP_HOST }}
@@ -161,7 +160,7 @@ jobs:
           username: deploy
           key:      ${{ secrets.MAINPC_SSH_KEY }}
           port:     ${{ secrets.MAINPC_SSH_PORT }}
-          envs:     FULL_DEPLOY,POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,ORIGIN_CERT,ORIGIN_KEY,PGADMIN_PASSWORD,ADMIN_USERNAME,ADMIN_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM
+          envs:     FULL_DEPLOY,POSTGRES_PASSWORD,RABBITMQ_PASS,MINIO_ROOT_PASSWORD,JWT_SECRET,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,GRAFANA_PASSWORD,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,DOMAIN,CLOUDFLARE_API_TOKEN,PGADMIN_PASSWORD,ADMIN_USERNAME,ADMIN_PASSWORD,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM
           script: |
             set -e
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
@@ -221,11 +220,24 @@ jobs:
             mv infra/nginx/upstream_sub.conf infra/nginx/upstream.conf
 
             if [ "${FULL_DEPLOY}" = "true" ]; then
-              # Full deploy: update certs, livekit, bring up everything
-              mkdir -p infra/nginx/ssl
-              printf '%s' "${ORIGIN_CERT}" | base64 -d > infra/nginx/ssl/origin.pem
-              printf '%s' "${ORIGIN_KEY}"  | base64 -d > infra/nginx/ssl/origin.key
-              chmod 600 infra/nginx/ssl/origin.key
+              # Write Cloudflare credentials for certbot DNS-01 challenge
+              mkdir -p infra/compose/certbot
+              printf 'dns_cloudflare_api_token = %s\n' "${CLOUDFLARE_API_TOKEN}" \
+                > infra/compose/certbot/cloudflare.ini
+              chmod 600 infra/compose/certbot/cloudflare.ini
+
+              # Issue/renew Let's Encrypt cert before nginx starts (DNS-01, no HTTP needed)
+              docker run --rm \
+                -v gssr_letsencrypt:/etc/letsencrypt \
+                -v "$(pwd)/infra/compose/certbot/cloudflare.ini:/cloudflare.ini:ro" \
+                certbot/dns-cloudflare certonly \
+                  --dns-cloudflare \
+                  --dns-cloudflare-credentials /cloudflare.ini \
+                  --dns-cloudflare-propagation-seconds 30 \
+                  -d "api.${DOMAIN}" \
+                  --non-interactive --agree-tos \
+                  --email "admin@${DOMAIN}" \
+                  --keep-until-expiring 2>&1 | tail -10
 
               printf 'port: 7880\nrtc:\n  port_range_start: 50000\n  port_range_end: 60000\n  tcp_port: 7881\nkeys:\n  %s: %s\nlogging:\n  level: info\n' \
                 "${LIVEKIT_API_KEY}" "${LIVEKIT_API_SECRET}" \
