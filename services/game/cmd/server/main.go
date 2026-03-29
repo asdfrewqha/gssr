@@ -70,6 +70,8 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowCredentials: true,
 		AllowOrigins:     os.Getenv("CORS_ORIGINS"),
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, Cookie",
+		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS",
 	}))
 
 	// Prometheus metrics
