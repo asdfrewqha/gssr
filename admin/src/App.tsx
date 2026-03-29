@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import AuthGuard from "./components/AuthGuard";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -12,7 +12,7 @@ import AdminManagement from "./pages/AdminManagement";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
@@ -32,6 +32,6 @@ export default function App() {
           <Route path="/panoramas" element={<Panoramas />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

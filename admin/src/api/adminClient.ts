@@ -16,7 +16,7 @@ api.interceptors.response.use(
         await api.post("/api/auth/refresh");
         return api(error.config);
       } catch {
-        window.location.href = "/login";
+        window.location.href = import.meta.env.BASE_URL + "#/login";
       }
     }
     return Promise.reject(error);

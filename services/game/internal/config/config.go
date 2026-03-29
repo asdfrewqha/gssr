@@ -22,8 +22,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	accessTTL, _ := time.ParseDuration(getEnv("JWT_ACCESS_TTL", "15m"))
-	refreshTTL, _ := time.ParseDuration(getEnv("JWT_REFRESH_TTL", "168h"))
+	accessTTL, _ := time.ParseDuration(getEnv("JWT_ACCESS_TTL", "4h"))
+	refreshTTL, _ := time.ParseDuration(getEnv("JWT_REFRESH_TTL", "720h"))
 
 	return &Config{
 		Port:        getEnv("PORT", "3000"),

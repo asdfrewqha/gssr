@@ -194,8 +194,8 @@ jobs:
               printf 'JWT_REFRESH_TTL=168h\n'
               printf 'WORKERS_DATABASE_URL=postgresql+asyncpg://gssr:%s@postgres:5432/gssr\n' "${POSTGRES_PASSWORD}"
               printf 'ADMIN_JWT_SECRET=%s\n'       "${JWT_SECRET}"
-              printf 'CORS_ORIGINS=https://%s,https://admin.%s\n' "${DOMAIN}" "${DOMAIN}"
-              printf 'ADMIN_CORS_ORIGINS=https://admin.%s\n' "${DOMAIN}"
+              printf 'CORS_ORIGINS=https://%s\n' "${DOMAIN}"
+              printf 'ADMIN_CORS_ORIGINS=https://%s\n' "${DOMAIN}"
               printf 'NSFW_MODEL_PATH=/app/models/nsfw.onnx\n'
               printf 'NSFW_THRESHOLD=0.7\n'
               printf 'LIVEKIT_URL=ws://livekit:7880\n'
