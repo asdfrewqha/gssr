@@ -74,6 +74,17 @@ func main() {
 		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS",
 	}))
 
+	// Yandex API Gateway strips Content-Type before forwarding to origin.
+	// All game service endpoints accept JSON only, so default to application/json.
+	app.Use(func(c *fiber.Ctx) error {
+		m := c.Method()
+		if (m == fiber.MethodPost || m == fiber.MethodPut || m == fiber.MethodPatch) &&
+			c.Get(fiber.HeaderContentType) == "" {
+			c.Request().Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		}
+		return c.Next()
+	})
+
 	// Prometheus metrics
 	prom := fiberprometheus.New("gssr_game")
 	prom.RegisterAt(app, "/metrics")
