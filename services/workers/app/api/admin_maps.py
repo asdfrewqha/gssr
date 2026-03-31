@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, AdminUser
 from app.config import settings
@@ -148,7 +149,11 @@ async def add_floor(
     # flush to get f.id before uploading to MinIO
     f = Floor(map_id=map_id, floor_number=floor_number, label=label, image_url="placeholder")
     db.add(f)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=f"Floor {floor_number} already exists on this map") from None
 
     minio_key = f"maps/{map_id}/floors/{f.id}/overlay{ext}"
     minio_client.put_object(
@@ -159,6 +164,38 @@ async def add_floor(
         content_type=image.content_type or "image/jpeg",
     )
     f.image_url = f"/{settings.minio_bucket_floors}/{minio_key}"
+    await db.commit()
+    await db.refresh(f)
+    return _floor_obj(f)
+
+
+@router.patch("/maps/{map_id}/floors/{floor_id}", status_code=status.HTTP_200_OK)
+async def update_floor_image(
+    map_id: str,
+    floor_id: str,
+    image: Annotated[UploadFile, File()],
+    db: DB,
+    _: AdminUser,
+    label: Annotated[str | None, Form()] = None,
+):
+    """Replace the floor plan image and/or label for an existing floor."""
+    f = await db.get(Floor, floor_id)
+    if not f or str(f.map_id) != map_id:
+        raise HTTPException(status_code=404, detail="floor not found")
+
+    content = await image.read()
+    ext = _ext(image.filename or "floor.jpg")
+    minio_key = f"maps/{map_id}/floors/{floor_id}/overlay{ext}"
+    minio_client.put_object(
+        settings.minio_bucket_floors,
+        minio_key,
+        io.BytesIO(content),
+        len(content),
+        content_type=image.content_type or "image/jpeg",
+    )
+    f.image_url = f"/{settings.minio_bucket_floors}/{minio_key}"
+    if label is not None:
+        f.label = label
     await db.commit()
     await db.refresh(f)
     return _floor_obj(f)

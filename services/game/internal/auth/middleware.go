@@ -10,14 +10,10 @@ const (
 	ctxIsAdmin = "isAdmin"
 )
 
-// parseAndStoreClaims validates the JWT access cookie and stores claims in locals.
-// Tries access_token (game) first, then admin_token (admin panel) as fallback.
-// It does NOT call c.Next(), so callers can add further checks before proceeding.
-func parseAndStoreClaims(c *fiber.Ctx, secret []byte) error {
-	token := c.Cookies("access_token")
-	if token == "" {
-		token = c.Cookies("admin_token")
-	}
+// parseClaims reads a JWT from the given cookie name, verifies it,
+// and stores the claims in Fiber locals. Returns an error if missing/invalid.
+func parseClaims(c *fiber.Ctx, secret []byte, cookieName string) error {
+	token := c.Cookies(cookieName)
 	if token == "" {
 		return fiber.NewError(fiber.StatusUnauthorized, "missing token")
 	}
@@ -30,21 +26,37 @@ func parseAndStoreClaims(c *fiber.Ctx, secret []byte) error {
 	return nil
 }
 
-// Required validates the JWT access cookie and stores claims in locals.
+// Required reads access_token (game player). Falls back to admin_token so that
+// admin panel can also call shared endpoints like /api/users/me.
 func Required(secret []byte) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if err := parseAndStoreClaims(c, secret); err != nil {
-			return err
+		// Try game token first; if missing try admin token (for admin panel shared routes).
+		if t := c.Cookies("access_token"); t != "" {
+			if err := parseClaims(c, secret, "access_token"); err != nil {
+				return err
+			}
+		} else {
+			if err := parseClaims(c, secret, "admin_token"); err != nil {
+				return err
+			}
 		}
 		return c.Next()
 	}
 }
 
-// AdminRequired additionally checks the isAdmin claim.
+// AdminRequired reads admin_token with priority, then falls back to access_token
+// (in case someone calls admin endpoint with a game token that has adm:true).
 func AdminRequired(secret []byte) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if err := parseAndStoreClaims(c, secret); err != nil {
-			return err
+		// Prefer admin_token so admin+player simultaneous sessions work correctly.
+		if t := c.Cookies("admin_token"); t != "" {
+			if err := parseClaims(c, secret, "admin_token"); err != nil {
+				return err
+			}
+		} else {
+			if err := parseClaims(c, secret, "access_token"); err != nil {
+				return err
+			}
 		}
 		if !c.Locals(ctxIsAdmin).(bool) {
 			return fiber.NewError(fiber.StatusForbidden, "admin only")
