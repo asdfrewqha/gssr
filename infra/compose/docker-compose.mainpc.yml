@@ -87,7 +87,7 @@ services:
   celery:
     image: ${DOCKERHUB_USERNAME}/gssr-workers:latest
     restart: unless-stopped
-    command: celery -A app.tasks.celery_app worker -l info -Q default -c 4
+    command: celery -A app.tasks.celery_app worker -l info -c 4
     depends_on:
       - rabbitmq
       - valkey

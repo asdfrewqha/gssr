@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
-from app.api import admin_admins, admin_maps, admin_panos, admin_users, health, internal
+from app.api import admin_admins, admin_maps, admin_panos, admin_users, admin_ws, health, internal
 from app.storage.minio_client import ensure_buckets
 
 app = FastAPI(title="GSSR Workers", version="2.0.0")
@@ -32,6 +32,7 @@ app.include_router(admin_maps.router, prefix="/admin")
 app.include_router(admin_panos.router, prefix="/admin")
 app.include_router(admin_users.router, prefix="/admin")
 app.include_router(admin_admins.router, prefix="/admin")
+app.include_router(admin_ws.router, prefix="/admin")
 app.include_router(internal.router)
 
 

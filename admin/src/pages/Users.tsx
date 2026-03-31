@@ -22,8 +22,21 @@ export default function Users() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [pendingNew, setPendingNew] = useState(0);
   const perPage = 50;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live registration feed via WebSocket
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE || "";
+    const wsBase = base
+      ? base.replace(/^http/, "ws")
+      : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+    const ws = new WebSocket(`${wsBase}/admin/ws/users`);
+    ws.onmessage = () => setPendingNew((n) => n + 1);
+    ws.onerror = () => ws.close();
+    return () => ws.close();
+  }, []);
 
   const load = (s: string, f: StatusFilter, p: number) => {
     setLoading(true);
@@ -79,7 +92,21 @@ export default function Users() {
 
   return (
     <div className="space-y-4 max-w-6xl">
-      <h1 className="text-2xl font-bold text-white">Users</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-white">Users</h1>
+        {pendingNew > 0 && (
+          <button
+            onClick={() => {
+              setPendingNew(0);
+              setPage(1);
+              load(search, statusFilter, 1);
+            }}
+            className="text-xs bg-indigo-900 border border-indigo-600 text-indigo-300 px-3 py-1 rounded hover:bg-indigo-800 transition-colors"
+          >
+            +{pendingNew} new — refresh
+          </button>
+        )}
+      </div>
 
       {/* Search + filters */}
       <div className="flex flex-wrap gap-3 items-center">

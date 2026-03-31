@@ -126,6 +126,12 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "username or email already taken"})
 	}
 
+	// Notify admin WebSocket clients about new registration (fire-and-forget)
+	go func() {
+		evt, _ := json.Marshal(map[string]string{"id": userID, "username": body.Username})
+		h.cache.Client.Publish(context.Background(), "events:users:new", string(evt))
+	}()
+
 	// Create email verification token (fire-and-forget on failure)
 	if token, err := generateToken(32); err == nil {
 		expiry := time.Now().Add(24 * time.Hour)

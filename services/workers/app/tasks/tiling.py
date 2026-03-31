@@ -20,12 +20,20 @@ def tile_panorama(self, pano_id: str):
 
     logger.info("Tiling panorama %s", pano_id)
 
+    import redis as _redis
+
+    _r = _redis.from_url(settings.valkey_url)
+
+    def _publish(status: str) -> None:
+        _r.publish(f"pano:status:{pano_id}", status)
+
     # Update status to "tiling"
     with sync_engine.begin() as conn:
         conn.execute(
             text("UPDATE panoramas SET tile_status = 'tiling' WHERE id = :id"),
             {"id": pano_id},
         )
+    _publish("tiling")
 
     try:
         raw_key = f"raw/{pano_id}.jpg"
@@ -62,6 +70,7 @@ def tile_panorama(self, pano_id: str):
                 text("UPDATE panoramas SET tile_status = 'tiled' WHERE id = :id"),
                 {"id": pano_id},
             )
+        _publish("tiled")
         logger.info("Tiling complete for %s", pano_id)
 
     except Exception as exc:
@@ -71,4 +80,5 @@ def tile_panorama(self, pano_id: str):
                 text("UPDATE panoramas SET tile_status = 'failed' WHERE id = :id"),
                 {"id": pano_id},
             )
+        _publish("failed")
         raise self.retry(exc=exc, countdown=60) from exc

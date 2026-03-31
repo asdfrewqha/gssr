@@ -184,25 +184,24 @@ export default function MapDetail() {
       setUploadStep("tiling");
       loadPanos();
 
-      // Poll tile_status every 2s
-      const poll = setInterval(async () => {
-        try {
-          const r = await api.get<{ tile_status: string }>(
-            `/admin/panoramas/${data.pano_id}`,
-          );
-          if (r.data.tile_status === "tiled") {
-            setUploadStep("done");
-            clearInterval(poll);
-            loadPanos();
-          } else if (r.data.tile_status === "failed") {
-            setUploadStep("failed");
-            clearInterval(poll);
-            loadPanos();
-          }
-        } catch {
-          clearInterval(poll);
+      // Subscribe to tiling status via WebSocket
+      const base = import.meta.env.VITE_API_BASE || "";
+      const wsBase = base
+        ? base.replace(/^http/, "ws")
+        : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+      const ws = new WebSocket(`${wsBase}/admin/ws/pano/${data.pano_id}`);
+      ws.onmessage = (e) => {
+        if (e.data === "tiled") {
+          setUploadStep("done");
+          ws.close();
+          loadPanos();
+        } else if (e.data === "failed") {
+          setUploadStep("failed");
+          ws.close();
+          loadPanos();
         }
-      }, 2000);
+      };
+      ws.onerror = () => ws.close();
     } catch (err) {
       setError(
         (err as { response?: { data?: { detail?: string } } }).response?.data

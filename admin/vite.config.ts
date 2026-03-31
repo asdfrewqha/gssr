@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => ({
       '/admin': {
         target: process.env.VITE_WORKERS_URL || 'http://localhost:8000',
         changeOrigin: true,
+        ws: true,
       },
     },
   },
