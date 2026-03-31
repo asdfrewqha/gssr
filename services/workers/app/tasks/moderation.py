@@ -38,6 +38,10 @@ def moderate_panorama(self, pano_id: str):
 
     logger.info("Moderating panorama %s", pano_id)
 
+    if not os.path.exists(settings.nsfw_model_path):
+        logger.warning("NSFW model not found at %s, skipping moderation for %s", settings.nsfw_model_path, pano_id)
+        return
+
     try:
         raw_key = f"raw/{pano_id}.jpg"
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:

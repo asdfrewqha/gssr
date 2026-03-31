@@ -260,7 +260,7 @@ export default function PlayGame() {
               </div>
               <div className="bg-gray-700 rounded-lg p-3">
                 <p className="text-2xl font-bold text-white">
-                  {result.distance.toFixed(0)}px
+                  {(result.distance / 10).toFixed(1)}%
                 </p>
                 <p className="text-gray-400 text-xs mt-1">Distance</p>
               </div>
@@ -273,7 +273,7 @@ export default function PlayGame() {
                 </p>
                 <p className="text-white text-sm">
                   Score: {result.community.avg_score.toLocaleString()} · Dist:{" "}
-                  {result.community.avg_distance.toFixed(0)}px ·{" "}
+                  {(result.community.avg_distance / 10).toFixed(1)}% ·{" "}
                   {result.community.total_guesses} guesses
                 </p>
               </div>

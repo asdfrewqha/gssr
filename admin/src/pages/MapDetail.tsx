@@ -57,7 +57,15 @@ export default function MapDetail() {
 
   // Edit map form
   const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", description: "" });
+  const [editForm, setEditForm] = useState({
+    name: "",
+    description: "",
+    x_min: "0",
+    x_max: "1",
+    y_min: "0",
+    y_max: "1",
+    coord_type: "normalized",
+  });
   const [saving, setSaving] = useState(false);
 
   // Pano upload
@@ -79,7 +87,15 @@ export default function MapDetail() {
   const loadMap = () =>
     api.get<MapDetail>(`/admin/maps/${id}`).then((r) => {
       setMap(r.data);
-      setEditForm({ name: r.data.name, description: r.data.description });
+      setEditForm({
+        name: r.data.name,
+        description: r.data.description,
+        x_min: String(r.data.x_min),
+        x_max: String(r.data.x_max),
+        y_min: String(r.data.y_min),
+        y_max: String(r.data.y_max),
+        coord_type: r.data.coord_type,
+      });
       if (r.data.floors.length > 0 && !selectedFloor) {
         setSelectedFloor(r.data.floors[0].id);
       }
@@ -276,6 +292,36 @@ export default function MapDetail() {
               onChange={(e) =>
                 setEditForm((f) => ({ ...f, description: e.target.value }))
               }
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400">Coordinate bounds</label>
+            <div className="mt-1 grid grid-cols-4 gap-2">
+              {(["x_min", "x_max", "y_min", "y_max"] as const).map((k) => (
+                <div key={k}>
+                  <label className="text-xs text-gray-500">{k}</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="mt-0.5 w-full bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editForm[k]}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, [k]: e.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400">Coord type</label>
+            <input
+              className="mt-1 w-full bg-gray-800 text-white rounded px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              value={editForm.coord_type}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, coord_type: e.target.value }))
+              }
+              placeholder="normalized / pixels / meters"
             />
           </div>
           <button

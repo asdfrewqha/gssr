@@ -20,13 +20,13 @@ def _decode_token(token: str) -> dict:
 
 
 async def admin_required(
-    access_token: Annotated[str | None, Cookie()] = None,
+    admin_token: Annotated[str | None, Cookie()] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict:
-    """Accept JWT from cookie (access_token) or Authorization: Bearer header."""
+    """Accept JWT from cookie (admin_token) or Authorization: Bearer header."""
     token: str | None = None
-    if access_token:
-        token = access_token
+    if admin_token:
+        token = admin_token
     elif authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ")
 

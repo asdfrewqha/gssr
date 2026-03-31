@@ -13,7 +13,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true;
       try {
-        await api.post("/api/auth/refresh");
+        await api.post("/api/auth/admin-refresh");
         return api(error.config);
       } catch {
         window.location.href = import.meta.env.BASE_URL + "#/login";

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 interface Props {
   panoId: string;
@@ -21,6 +21,18 @@ export function PanoramaViewer({ panoId }: Props) {
     scrollLeft: 0,
     scrollTop: 0,
   });
+
+  // Center the view on the horizon when the pano changes.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Small delay so the image has sized up before we read scrollHeight.
+    const timer = setTimeout(() => {
+      el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+      el.scrollLeft = 0;
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [panoId]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (!containerRef.current) return;
@@ -72,9 +84,13 @@ export function PanoramaViewer({ panoId }: Props) {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
     >
+      {/* Display at 200vh height so the equirectangular image overflows vertically.
+          For a 2:1 panorama this gives ~400vh width — full horizontal rotation.
+          Initial scrollTop is centered (horizon) via the useEffect above. */}
       <img
         src={`${s3Url}/gssr-panoramas/raw/${panoId}.jpg`}
-        className="h-full w-auto max-w-none pointer-events-none"
+        style={{ height: "200vh", width: "auto", maxWidth: "none" }}
+        className="pointer-events-none"
         alt=""
         draggable={false}
       />

@@ -303,9 +303,19 @@ func (h *Handler) Logout(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// cookieNames returns access/refresh cookie names and the refresh path for a given role.
+func cookieNames(isAdmin bool) (access, refresh, refreshPath string) {
+	if isAdmin {
+		return "admin_token", "admin_refresh", "/api/auth/admin-refresh"
+	}
+	return "access_token", "refresh_token", "/api/auth/refresh"
+}
+
 func (h *Handler) issueTokens(c *fiber.Ctx, userIDStr string, isAdmin bool) error {
 	claims := &Claims{}
 	_ = claims.UserID.UnmarshalText([]byte(userIDStr))
+
+	accessName, refreshName, refreshPath := cookieNames(isAdmin)
 
 	access, err := SignAccess(h.cfg.JWTSecret, claims.UserID, isAdmin, h.cfg.JWTAccessTTL)
 	if err != nil {
@@ -321,7 +331,7 @@ func (h *Handler) issueTokens(c *fiber.Ctx, userIDStr string, isAdmin bool) erro
 	h.cache.Client.Set(context.Background(), key, refreshJWT, h.cfg.JWTRefreshTTL)
 
 	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
+		Name:     accessName,
 		Value:    access,
 		HTTPOnly: true,
 		Secure:   true,
@@ -329,22 +339,45 @@ func (h *Handler) issueTokens(c *fiber.Ctx, userIDStr string, isAdmin bool) erro
 		MaxAge:   int(h.cfg.JWTAccessTTL.Seconds()),
 	})
 	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
+		Name:     refreshName,
 		Value:    refreshJWT,
 		HTTPOnly: true,
 		Secure:   true,
 		SameSite: "Strict",
-		Path:     "/api/auth/refresh",
+		Path:     refreshPath,
 		MaxAge:   int(h.cfg.JWTRefreshTTL.Seconds()),
 	})
 
 	return c.JSON(fiber.Map{"user_id": claims.UserID, "expires_in": int(h.cfg.JWTAccessTTL.Seconds())})
 }
 
+// AdminRefresh rotates admin tokens using the admin_refresh cookie.
+func (h *Handler) AdminRefresh(c *fiber.Ctx) error {
+	refreshToken := c.Cookies("admin_refresh")
+	if refreshToken == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing refresh token"})
+	}
+	claims, err := Verify(h.cfg.JWTSecret, refreshToken)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid refresh token"})
+	}
+
+	key := fmt.Sprintf("refresh:%s", claims.UserID)
+	stored, err := h.cache.Client.Get(context.Background(), key).Result()
+	if err != nil || stored != refreshToken {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "refresh token revoked"})
+	}
+
+	return h.issueTokens(c, claims.UserID.String(), true)
+}
+
 func clearCookies(c *fiber.Ctx) {
 	expired := time.Now().Add(-time.Hour)
+	// Clear both game and admin cookie sets.
 	c.Cookie(&fiber.Cookie{Name: "access_token", Expires: expired, HTTPOnly: true})
 	c.Cookie(&fiber.Cookie{Name: "refresh_token", Expires: expired, HTTPOnly: true})
+	c.Cookie(&fiber.Cookie{Name: "admin_token", Expires: expired, HTTPOnly: true})
+	c.Cookie(&fiber.Cookie{Name: "admin_refresh", Expires: expired, HTTPOnly: true})
 }
 
 func generateToken(n int) (string, error) {

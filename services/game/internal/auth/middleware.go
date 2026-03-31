@@ -11,9 +11,13 @@ const (
 )
 
 // parseAndStoreClaims validates the JWT access cookie and stores claims in locals.
+// Tries access_token (game) first, then admin_token (admin panel) as fallback.
 // It does NOT call c.Next(), so callers can add further checks before proceeding.
 func parseAndStoreClaims(c *fiber.Ctx, secret []byte) error {
 	token := c.Cookies("access_token")
+	if token == "" {
+		token = c.Cookies("admin_token")
+	}
 	if token == "" {
 		return fiber.NewError(fiber.StatusUnauthorized, "missing token")
 	}

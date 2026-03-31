@@ -108,6 +108,7 @@ func main() {
 	authGroup.Post("/admin-login", authHandler.AdminLogin)
 	authGroup.Get("/verify-email", authHandler.VerifyEmail)
 	authGroup.Post("/refresh", authHandler.Refresh)
+	authGroup.Post("/admin-refresh", authHandler.AdminRefresh)
 	authGroup.Post("/logout", auth.Required(cfg.JWTSecret), authHandler.Logout)
 
 	// Users

@@ -224,8 +224,11 @@ func (h *Handler) Guess(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	score := game.CalculateScore(req.X, req.Y, ax, ay, req.FloorID, aFloorID, diff.K)
-	distance := game.Distance(req.X, req.Y, ax, ay)
+	// Coordinates are stored as normalized [0,1]; scale to pseudo-pixel space
+	// so that K values (350/200/100) produce meaningful score curves.
+	const coordScale = 1000.0
+	score := game.CalculateScore(req.X*coordScale, req.Y*coordScale, ax*coordScale, ay*coordScale, req.FloorID, aFloorID, diff.K)
+	distance := game.Distance(req.X*coordScale, req.Y*coordScale, ax*coordScale, ay*coordScale)
 
 	// Fetch community stats for this panorama (last 30 days).
 	var avgScore float64
