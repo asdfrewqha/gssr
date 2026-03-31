@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import pannellum from "pannellum";
+import * as pannellum from "pannellum";
 import "pannellum/build/pannellum.css";
 
 // Pannellum multires tile parameters — must match tiling.py

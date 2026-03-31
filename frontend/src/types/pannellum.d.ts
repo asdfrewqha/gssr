@@ -41,9 +41,5 @@ declare module "pannellum" {
     [key: string]: unknown;
   }
 
-  const pannellum: {
-    viewer(container: HTMLElement, config: Config): Viewer;
-  };
-
-  export default pannellum;
+  export function viewer(container: HTMLElement, config: Config): Viewer;
 }
