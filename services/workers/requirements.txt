@@ -4,6 +4,7 @@ celery[librabbitmq,redis]==5.4.0
 sqlalchemy[asyncio]==2.0.31
 asyncpg==0.29.0
 psycopg2-binary==2.9.9
+py360convert==0.1.0
 pyvips==2.2.3
 minio==7.2.7
 onnxruntime==1.18.0

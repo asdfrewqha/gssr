@@ -23,8 +23,8 @@ def _get_session():
 
 
 def _preprocess(img_path: str) -> np.ndarray:
-    """Resize to 299×299, normalize to [-1, 1], add batch dim."""
-    img = Image.open(img_path).convert("RGB").resize((299, 299))
+    """Resize to 224×224, normalize to [-1, 1], add batch dim."""
+    img = Image.open(img_path).convert("RGB").resize((224, 224))
     arr = np.array(img, dtype=np.float32) / 127.5 - 1.0
     return np.expand_dims(arr, axis=0)
 
