@@ -39,7 +39,8 @@ export function PanoramaViewer({ panoId }: Props) {
           viewerRef.current = pannellum.viewer(containerRef.current, {
             type: "multires",
             multiRes: {
-              path: `${tileBase}/%l/%s/%y_%x`,
+              basePath: `${tileBase}`,
+              path: `/%l/%s/%y_%x`,
               extension: "webp",
               tileResolution: TILE_RESOLUTION,
               maxLevel: MAX_LEVEL,

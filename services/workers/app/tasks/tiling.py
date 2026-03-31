@@ -54,7 +54,29 @@ def tile_panorama(self, pano_id: str):
 
             # Load equirectangular as numpy array
             e_img = np.array(Image.open(raw_path).convert("RGB"))
-            logger.info("Panorama %s: input size %dx%d", pano_id, e_img.shape[1], e_img.shape[0])
+            h, w = e_img.shape[:2]
+            logger.info("Panorama %s: input size %dx%d", pano_id, w, h)
+
+            # Enforce 2:1 aspect ratio required by equirectangular projection
+            expected_h = w // 2
+            if h != expected_h:
+                logger.warning(
+                    "Panorama %s: non-standard ratio %dx%d, padding/cropping to %dx%d",
+                    pano_id,
+                    w,
+                    h,
+                    w,
+                    expected_h,
+                )
+                if h > expected_h:
+                    # Crop: center-crop vertically
+                    top = (h - expected_h) // 2
+                    e_img = e_img[top : top + expected_h, :, :]
+                else:
+                    # Pad with black rows evenly top and bottom
+                    pad_top = (expected_h - h) // 2
+                    pad_bot = expected_h - h - pad_top
+                    e_img = np.pad(e_img, ((pad_top, pad_bot), (0, 0), (0, 0)))
 
             # Convert equirectangular → 6 cube faces at CUBE_FACE_RESOLUTION
             # faces: dict {'F','B','L','R','U','D'} → numpy uint8 (face_w, face_w, 3)

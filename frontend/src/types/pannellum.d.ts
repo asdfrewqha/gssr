@@ -11,6 +11,7 @@ declare module "pannellum" {
   }
 
   interface MultiResConfig {
+    basePath: string;
     path: string;
     extension: string;
     tileResolution: number;
