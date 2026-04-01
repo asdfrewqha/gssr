@@ -1,10 +1,11 @@
+import glob
 import logging
 import math
 import os
+import subprocess
+import sys
 import tempfile
 
-import numpy as np
-import py360convert
 from PIL import Image
 
 from app.config import settings
@@ -13,13 +14,13 @@ from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-# Pannellum multires parameters
+# Pannellum multires parameters — must match PanoramaViewer constants
 CUBE_FACE_RESOLUTION = 4096  # pixels per cube face at max level
 TILE_RESOLUTION = 512  # pixels per tile
 MAX_LEVEL = int(math.log2(CUBE_FACE_RESOLUTION // TILE_RESOLUTION)) + 1  # = 4
 
-# py360convert face key → Pannellum face code
-FACE_MAP = {"F": "f", "B": "b", "L": "l", "R": "r", "U": "u", "D": "d"}
+# generate.py lives at /app/generate.py inside the container (WORKDIR /app)
+_GENERATE_PY = os.path.join(os.path.dirname(__file__), "..", "..", "generate.py")
 
 
 @celery_app.task(name="tile_panorama", bind=True, max_retries=3)
@@ -52,35 +53,47 @@ def tile_panorama(self, pano_id: str):
             raw_path = os.path.join(tmpdir, "panorama.jpg")
             minio_client.fget_object(settings.minio_bucket_panoramas, raw_key, raw_path)
 
-            # Load equirectangular as numpy array
-            e_img = np.array(Image.open(raw_path).convert("RGB"))
-            h, w = e_img.shape[:2]
-            logger.info("Panorama %s: input size %dx%d", pano_id, w, h)
+            # Generate compressed preview (2048×1024, q=40) before tiling so viewer
+            # can show equirectangular fallback while tiles are being generated.
+            preview_path = os.path.join(tmpdir, "preview.jpg")
+            with Image.open(raw_path) as img:
+                preview = img.resize((2048, 1024), Image.LANCZOS)
+                preview.save(preview_path, "JPEG", quality=40, optimize=True)
+            minio_client.fput_object(
+                settings.minio_bucket_panoramas,
+                f"{prefix}/preview.jpg",
+                preview_path,
+                content_type="image/jpeg",
+            )
+            logger.debug("Preview uploaded for %s", pano_id)
 
-            # Enforce 2:1 aspect ratio required by equirectangular projection
-            expected_h = w // 2
-            if h != expected_h:
-                logger.warning(
-                    "Panorama %s: non-standard ratio %dx%d, padding/cropping to %dx%d",
-                    pano_id,
-                    w,
-                    h,
-                    w,
-                    expected_h,
-                )
-                if h > expected_h:
-                    # Crop: center-crop vertically
-                    top = (h - expected_h) // 2
-                    e_img = e_img[top : top + expected_h, :, :]
-                else:
-                    # Pad with black rows evenly top and bottom
-                    pad_top = (expected_h - h) // 2
-                    pad_bot = expected_h - h - pad_top
-                    e_img = np.pad(e_img, ((pad_top, pad_bot), (0, 0), (0, 0)))
+            output_dir = os.path.join(tmpdir, "output")
 
-            # Convert equirectangular → 6 cube faces at CUBE_FACE_RESOLUTION
-            # faces: dict {'F','B','L','R','U','D'} → numpy uint8 (face_w, face_w, 3)
-            faces = py360convert.e2c(e_img, face_w=CUBE_FACE_RESOLUTION, cube_format="dict")
+            # generate.py uses argparse at module level so must be called as subprocess.
+            # Outputs tiles as: output/{level}/{face}{row}_{col}.jpg
+            # Path template for viewer: /%l/%s%y_%x (matches Pannellum generate.py exactly)
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    os.path.abspath(_GENERATE_PY),
+                    raw_path,
+                    "-o",
+                    output_dir,
+                    "-s",
+                    str(TILE_RESOLUTION),
+                    "-c",
+                    str(CUBE_FACE_RESOLUTION),
+                    "-H",
+                    "360",
+                    "-V",
+                    "180",
+                    "-q",
+                    "85",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            logger.debug("generate.py finished for %s", pano_id)
 
             # Remove old tiles before uploading new ones
             try:
@@ -90,34 +103,17 @@ def tile_panorama(self, pano_id: str):
             except Exception as cleanup_exc:
                 logger.warning("Old tile cleanup failed for %s: %s", pano_id, cleanup_exc)
 
+            # Upload tiles: output/{level}/{face}{row}_{col}.jpg → prefix/{level}/{face}{row}_{col}.jpg
             total_tiles = 0
-            for py360_key, face_code in FACE_MAP.items():
-                face_img = Image.fromarray(faces[py360_key])
-
-                for level in range(1, MAX_LEVEL + 1):
-                    level_size = TILE_RESOLUTION * (2 ** (level - 1))
-                    resized = face_img.resize((level_size, level_size), Image.LANCZOS)
-
-                    num_tiles = level_size // TILE_RESOLUTION
-                    for ty in range(num_tiles):
-                        for tx in range(num_tiles):
-                            tile = resized.crop(
-                                (
-                                    tx * TILE_RESOLUTION,
-                                    ty * TILE_RESOLUTION,
-                                    (tx + 1) * TILE_RESOLUTION,
-                                    (ty + 1) * TILE_RESOLUTION,
-                                )
-                            )
-                            tile_path = os.path.join(tmpdir, f"t_{level}_{face_code}_{ty}_{tx}.webp")
-                            tile.save(tile_path, "WEBP", quality=85)
-                            minio_client.fput_object(
-                                settings.minio_bucket_panoramas,
-                                f"{prefix}/{level}/{face_code}/{ty}_{tx}.webp",
-                                tile_path,
-                            )
-                            os.unlink(tile_path)
-                            total_tiles += 1
+            for tile_path in glob.glob(os.path.join(output_dir, "*", "*.jpg")):
+                rel = os.path.relpath(tile_path, output_dir).replace(os.sep, "/")
+                minio_client.fput_object(
+                    settings.minio_bucket_panoramas,
+                    f"{prefix}/{rel}",
+                    tile_path,
+                    content_type="image/jpeg",
+                )
+                total_tiles += 1
 
         with sync_engine.begin() as conn:
             conn.execute(

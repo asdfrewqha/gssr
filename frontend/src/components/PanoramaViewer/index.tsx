@@ -36,7 +36,7 @@ export function PanoramaViewer({ panoId }: Props) {
     viewerRef.current = null;
 
     const tileBase = `${s3Url}/gssr-panoramas/maps/panoramas/${panoId}`;
-    const checkUrl = `${tileBase}/1/f/0_0.webp`;
+    const checkUrl = `${tileBase}/1/f0_0.jpg`;
 
     // Probe for tiles: if the level-1 front tile exists → use multires, else raw equirectangular
     fetch(checkUrl, { method: "HEAD" })
@@ -50,8 +50,8 @@ export function PanoramaViewer({ panoId }: Props) {
             type: "multires",
             multiRes: {
               basePath: `${tileBase}`,
-              path: `/%l/%s/%y_%x`,
-              extension: "webp",
+              path: `/%l/%s%y_%x`,
+              extension: "jpg",
               tileResolution: TILE_RESOLUTION,
               maxLevel: MAX_LEVEL,
               cubeResolution: CUBE_FACE_RESOLUTION,
@@ -63,7 +63,7 @@ export function PanoramaViewer({ panoId }: Props) {
         } else {
           viewerRef.current = pnl.viewer(containerRef.current, {
             type: "equirectangular",
-            panorama: `${s3Url}/gssr-panoramas/raw/${panoId}.jpg`,
+            panorama: `${tileBase}/preview.jpg`,
             autoLoad: true,
             showControls: false,
             compass: false,
