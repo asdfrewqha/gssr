@@ -91,7 +91,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 	if err := h.store.Set(c.Context(), state); err != nil {
 		return fiber.ErrInternalServerError
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"room_id": roomID})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": roomID, "map_id": req.MapID, "rounds": req.Rounds})
 }
 
 // ──────────────────────────────────────────────
@@ -144,7 +144,7 @@ func (h *Handler) Join(c *fiber.Ctx) error {
 	// Check if already joined
 	for _, p := range state.Players {
 		if p.UserID == userID.String() {
-			return c.JSON(fiber.Map{"ok": true})
+			return c.JSON(fiber.Map{"id": roomID, "map_id": state.MapID, "rounds": state.Rounds})
 		}
 	}
 
@@ -167,7 +167,7 @@ func (h *Handler) Join(c *fiber.Ctx) error {
 		Event:   "player_joined",
 		Payload: mustMarshal(map[string]any{"user_id": p.UserID, "username": p.Username, "elo": p.ELO}),
 	})
-	return c.JSON(fiber.Map{"ok": true})
+	return c.JSON(fiber.Map{"id": roomID, "map_id": state.MapID, "rounds": state.Rounds})
 }
 
 // ──────────────────────────────────────────────
