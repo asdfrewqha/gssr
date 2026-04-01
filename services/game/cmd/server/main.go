@@ -114,6 +114,9 @@ func main() {
 	// Users
 	userHandler := user.NewHandler(pg)
 	api.Get("/users/me", auth.Required(cfg.JWTSecret), userHandler.GetMe)
+	// Admin-only identity endpoint — uses AdminRequired so admin_token wins over access_token
+	// when both are present (i.e. user logged in as both player and admin simultaneously).
+	api.Get("/admin/me", auth.AdminRequired(cfg.JWTSecret), userHandler.GetMe)
 
 	// Maps (public)
 	mapsHandler := maps.NewHandler(pg)

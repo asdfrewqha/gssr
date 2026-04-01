@@ -209,6 +209,7 @@ jobs:
               printf 'ADMIN_USERNAME=%s\n'         "${ADMIN_USERNAME}"
               printf 'ADMIN_PASSWORD=%s\n'         "${ADMIN_PASSWORD}"
               printf 'FRONTEND_URL=https://%s\n'   "${DOMAIN}"
+              printf 'GAME_API_URL=https://api.%s\n' "${DOMAIN}"
               printf 'SMTP_HOST=%s\n'              "${SMTP_HOST}"
               printf 'SMTP_PORT=%s\n'              "${SMTP_PORT:-587}"
               printf 'SMTP_USER=%s\n'              "${SMTP_USER}"

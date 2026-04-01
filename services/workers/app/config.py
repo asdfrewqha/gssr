@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@gssr.school"
     frontend_url: str = "http://localhost:5173"
+    game_api_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

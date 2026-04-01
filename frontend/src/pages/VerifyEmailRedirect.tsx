@@ -12,7 +12,8 @@ export default function VerifyEmailRedirect() {
   useEffect(() => {
     const token = params.get("token");
     if (token) {
-      window.location.href = `/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+      const apiBase = import.meta.env.VITE_API_URL || "";
+      window.location.href = `${apiBase}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
     }
   }, [params]);
 

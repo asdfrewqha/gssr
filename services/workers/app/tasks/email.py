@@ -34,7 +34,7 @@ def _send_smtp(to: str, subject: str, html: str) -> None:
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def send_verification_email(self, user_id: str, email: str, token: str) -> None:
     """Send email verification link to a newly registered user."""
-    verify_url = f"{settings.frontend_url}/verify-email?token={token}"
+    verify_url = f"{settings.game_api_url}/api/auth/verify-email?token={token}"
     subject = "Подтвердите ваш email — GSSR"
     btn_style = (
         "background:#6366f1;color:#fff;padding:12px 24px;" "border-radius:6px;text-decoration:none;font-weight:bold;"

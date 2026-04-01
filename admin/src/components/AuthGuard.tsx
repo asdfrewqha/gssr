@@ -20,7 +20,7 @@ export default function AuthGuard({ children }: Props) {
 
   useEffect(() => {
     api
-      .get<Me>("/api/users/me")
+      .get<Me>("/api/admin/me")
       .then((res) => setState(res.data.is_admin ? "ok" : "forbidden"))
       .catch(() => setState("unauth"));
   }, []);
