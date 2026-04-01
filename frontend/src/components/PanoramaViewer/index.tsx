@@ -40,6 +40,13 @@ export function PanoramaViewer({ panoId }: Props) {
       .catch(() => false)
       .then((hasTiles) => {
         if (cancelled || !containerRef.current) return;
+        console.log(
+          "[PanoramaViewer] hasTiles=%s size=%dx%d pnl.viewer=%s",
+          hasTiles,
+          containerRef.current.clientWidth,
+          containerRef.current.clientHeight,
+          typeof pnl.viewer,
+        );
 
         if (hasTiles) {
           viewerRef.current = pnl.viewer(containerRef.current, {
