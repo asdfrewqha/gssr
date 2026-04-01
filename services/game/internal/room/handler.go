@@ -347,7 +347,10 @@ func (h *Handler) Guess(c *fiber.Ctx) error {
 	}
 
 	state, err := h.store.Get(c.Context(), roomID)
-	if err != nil || state == nil {
+	if err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "state unavailable"})
+	}
+	if state == nil {
 		return fiber.ErrNotFound
 	}
 	if state.Status != "active" {
