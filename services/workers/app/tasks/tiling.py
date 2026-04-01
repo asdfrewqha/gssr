@@ -72,7 +72,7 @@ def tile_panorama(self, pano_id: str):
             # generate.py uses argparse at module level so must be called as subprocess.
             # Outputs tiles as: output/{level}/{face}{row}_{col}.jpg
             # Path template for viewer: /%l/%s%y_%x (matches Pannellum generate.py exactly)
-            subprocess.check_call(
+            proc = subprocess.run(
                 [
                     sys.executable,
                     os.path.abspath(_GENERATE_PY),
@@ -91,8 +91,12 @@ def tile_panorama(self, pano_id: str):
                     "85",
                 ],
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
             )
+            if proc.returncode != 0:
+                logger.error("generate.py failed (exit %d):\n%s", proc.returncode, proc.stderr)
+                raise subprocess.CalledProcessError(proc.returncode, proc.args)
             logger.debug("generate.py finished for %s", pano_id)
 
             # Remove old tiles before uploading new ones

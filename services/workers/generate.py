@@ -312,15 +312,12 @@ with open(os.path.join(args.output, "cubic.pto"), "w") as f:
 
 # Create cube faces
 print("Generating cube faces...")
-subprocess.check_call(
-    [
-        args.nona,
-        ("-g" if args.gpu else "-d"),
-        "-o",
-        os.path.join(args.output, "face"),
-        os.path.join(args.output, "cubic.pto"),
-    ]
-)
+# Note: -d (diffuse interpolation) requires Hugin >= 2019.0; omit for apt compatibility.
+nona_cmd = [args.nona]
+if args.gpu:
+    nona_cmd.append("-g")
+nona_cmd += ["-o", os.path.join(args.output, "face"), os.path.join(args.output, "cubic.pto")]
+subprocess.check_call(nona_cmd)
 faces = ["face0000.tif", "face0001.tif", "face0002.tif", "face0003.tif", "face0004.tif", "face0005.tif"]
 
 # Generate tiles
