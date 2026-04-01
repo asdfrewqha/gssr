@@ -56,6 +56,9 @@ export default function PlayGame() {
   const [showMap, setShowMap] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Key for localStorage: stores unix-ms when current round started.
+  const roundStartKey = (round: number) => `pano_rs_${sessionId}_${round}`;
+
   // Load session + map floors on mount.
   useEffect(() => {
     if (!sessionId) return;
@@ -64,7 +67,16 @@ export default function PlayGame() {
       .then(async (r) => {
         const s = r.data;
         setSession(s);
-        setTimeLeft(s.time_limit_sec);
+        // Compute remaining time — preserve timer across page reloads.
+        const key = roundStartKey(s.round);
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const elapsed = Math.floor((Date.now() - parseInt(stored)) / 1000);
+          setTimeLeft(Math.max(0, s.time_limit_sec - elapsed));
+        } else {
+          localStorage.setItem(key, String(Date.now()));
+          setTimeLeft(s.time_limit_sec);
+        }
         // Fetch floors for the map.
         if (s.map_id) {
           const mapRes = await client.get<{ floors: Floor[] }>(
@@ -77,12 +89,11 @@ export default function PlayGame() {
         setLoading(false);
       })
       .catch(() => navigate("/"));
-  }, [sessionId, navigate]);
+  }, [sessionId, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Countdown timer.
+  // Countdown timer — starts from current timeLeft (set by load effect or continueGame).
   useEffect(() => {
     if (phase !== "guessing" || !session || loading) return;
-    setTimeLeft(session.time_limit_sec);
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -125,18 +136,22 @@ export default function PlayGame() {
   submitGuessRef.current = submitGuess;
 
   const continueGame = () => {
-    if (!result) return;
+    if (!result || !session) return;
     if (result.finished) {
       navigate(`/play/${sessionId}/result`);
       return;
     }
+    // Store start time for the new round so re-entry computes correct remaining time.
+    const nextRound = result.round!;
+    localStorage.setItem(roundStartKey(nextRound), String(Date.now()));
+    setTimeLeft(session.time_limit_sec);
     // Advance to next round.
     setSession((s) =>
       s
         ? {
             ...s,
             pano_id: result.next_pano_id!,
-            round: result.round!,
+            round: nextRound,
             total_score: result.total_score,
           }
         : s,

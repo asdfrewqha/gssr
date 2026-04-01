@@ -170,7 +170,9 @@ class SoloSession(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    map_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("maps.id"), nullable=False)
+    map_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("maps.id", ondelete="CASCADE"), nullable=False
+    )
     difficulty: Mapped[str] = mapped_column(String(32), nullable=False, default="normal")
     status: Mapped[str] = mapped_column(SoloStatusEnum, nullable=False, default="active")
     rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
