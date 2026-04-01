@@ -38,41 +38,54 @@ export function PanoramaViewer({ panoId }: Props) {
     const tileBase = `${s3Url}/gssr-panoramas/maps/panoramas/${panoId}`;
     const checkUrl = `${tileBase}/1/f0_0.jpg`;
 
-    // Probe for tiles: if the level-1 front tile exists → use multires, else raw equirectangular
-    fetch(checkUrl, { method: "HEAD" })
-      .then((r) => r.ok)
-      .catch(() => false)
-      .then((hasTiles) => {
-        if (cancelled || !containerRef.current) return;
+    // Probe for tiles + fetch Pannellum config in parallel
+    Promise.all([
+      fetch(checkUrl, { method: "HEAD" })
+        .then((r) => r.ok)
+        .catch(() => false),
+      fetch(`${tileBase}/config.json`)
+        .then((r) => r.json())
+        .catch(() => null),
+    ]).then(([hasTiles, cfg]) => {
+      if (cancelled || !containerRef.current) return;
 
-        if (hasTiles) {
-          viewerRef.current = pnl.viewer(containerRef.current, {
-            type: "multires",
-            multiRes: {
-              basePath: `${tileBase}`,
-              path: `/%l/%s%y_%x`,
-              extension: "jpg",
-              tileResolution: TILE_RESOLUTION,
-              maxLevel: MAX_LEVEL,
-              cubeResolution: CUBE_FACE_RESOLUTION,
-            },
-            autoLoad: true,
-            showControls: false,
-            compass: false,
-          });
-        } else {
-          viewerRef.current = pnl.viewer(containerRef.current, {
-            type: "equirectangular",
-            panorama: `${tileBase}/preview.jpg`,
-            autoLoad: true,
-            showControls: false,
-            compass: false,
-            hfov: 100,
-            minHfov: 30,
-            maxHfov: 120,
-          });
-        }
-      });
+      if (hasTiles && cfg) {
+        // Use generate.py config.json: contains haov/vaov/vOffset/minYaw/maxPitch for partial panos
+        cfg.multiRes.basePath = tileBase;
+        cfg.autoLoad = true;
+        cfg.showControls = false;
+        cfg.compass = false;
+        viewerRef.current = pnl.viewer(containerRef.current, cfg);
+      } else if (hasTiles) {
+        // Legacy: tiles exist but no config.json
+        viewerRef.current = pnl.viewer(containerRef.current, {
+          type: "multires",
+          multiRes: {
+            basePath: tileBase,
+            path: `/%l/%s%y_%x`,
+            extension: "jpg",
+            tileResolution: TILE_RESOLUTION,
+            maxLevel: MAX_LEVEL,
+            cubeResolution: CUBE_FACE_RESOLUTION,
+          },
+          autoLoad: true,
+          showControls: false,
+          compass: false,
+        });
+      } else {
+        // No tiles yet — equirectangular preview fallback
+        viewerRef.current = pnl.viewer(containerRef.current, {
+          type: "equirectangular",
+          panorama: `${tileBase}/preview.jpg`,
+          autoLoad: true,
+          showControls: false,
+          compass: false,
+          hfov: 100,
+          minHfov: 30,
+          maxHfov: 120,
+        });
+      }
+    });
 
     return () => {
       cancelled = true;

@@ -116,6 +116,10 @@ class Panorama(Base):
     tile_status: Mapped[str] = mapped_column(TileStatusEnum, nullable=False, default="pending")
     moderation_status: Mapped[str] = mapped_column(ModerationStatusEnum, nullable=False, default="pending")
     nsfw_score: Mapped[float | None] = mapped_column(Float)
+    haov: Mapped[float] = mapped_column(Float, nullable=False, server_default="360.0")
+    vaov: Mapped[float] = mapped_column(Float, nullable=False, server_default="180.0")
+    voffset: Mapped[float] = mapped_column(Float, nullable=False, server_default="0.0")
+    source_format: Mapped[str] = mapped_column(String(32), nullable=False, server_default="equirectangular")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     floor: Mapped[Floor] = relationship("Floor", back_populates="panoramas")

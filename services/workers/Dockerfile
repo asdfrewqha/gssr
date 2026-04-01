@@ -1,11 +1,13 @@
 FROM python:3.11-slim
 
-# gcc + python3-dev needed to compile pyvips cffi extension (slim image has no build tools)
-# libvips-dev provides the native library for panorama tiling
+# gcc + python3-dev: build tools for pip packages
+# hugin-tools: nona for cube-face projection (panorama tiling)
+# ffmpeg: dual-fisheye → equirectangular conversion (Samsung SM-C200 / Gear 360)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     hugin-tools \
+    ffmpeg \
     wget \
     && rm -rf /var/lib/apt/lists/*
 

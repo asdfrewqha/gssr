@@ -28,6 +28,10 @@ async def get_upload_url(
     db: DB,
     _: AdminUser,
     north_offset: float = 0.0,
+    haov: float = 360.0,
+    vaov: float = 180.0,
+    voffset: float = 0.0,
+    source_format: str = "equirectangular",
 ):
     """Step 1: create panorama record + return presigned PUT URL for direct browser→MinIO upload."""
     f = await db.get(Floor, floor_id)
@@ -53,6 +57,10 @@ async def get_upload_url(
         x=x,
         y=y,
         north_offset=north_offset,
+        haov=haov,
+        vaov=vaov,
+        voffset=voffset,
+        source_format=source_format,
         moderation_status="clean",
     )
     db.add(p)
@@ -191,6 +199,26 @@ async def retile_panorama(pano_id: str, db: DB, _: AdminUser):
 
     tile_panorama.delay(pano_id)
     return {"id": pano_id, "tile_status": "pending"}
+
+
+class _MovePano(BaseModel):
+    x: float
+    y: float
+    floor_id: str | None = None
+
+
+@router.patch("/panoramas/{pano_id}", status_code=200)
+async def move_panorama(pano_id: str, body: _MovePano, db: DB, _: AdminUser):
+    """Update panorama position (drag-and-drop reposition)."""
+    p = await db.get(Panorama, pano_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="panorama not found")
+    p.x = body.x
+    p.y = body.y
+    if body.floor_id:
+        p.floor_id = body.floor_id  # type: ignore[assignment]
+    await db.commit()
+    return {"ok": True}
 
 
 @router.delete("/panoramas/{pano_id}", status_code=status.HTTP_204_NO_CONTENT)

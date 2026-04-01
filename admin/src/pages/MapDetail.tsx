@@ -54,34 +54,67 @@ function apiError(err: unknown, fallback = "Error"): string {
   return e?.response?.data?.detail ?? e?.message ?? fallback;
 }
 
-// ── Floor plan with pano dots ─────────────────────────────────────────────────
+// ── Floor plan with pano dots + drag-and-drop ─────────────────────────────────
 function FloorPlan({
   floor,
   panos,
   pendingX,
   pendingY,
   onClick,
+  onPanoDragEnd,
 }: {
   floor: Floor;
   panos: Pano[];
   pendingX?: number;
   pendingY?: number;
   onClick?: (x: number, y: number) => void;
+  onPanoDragEnd?: (id: string, x: number, y: number) => void;
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
+  const [dragging, setDragging] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
   if (!floor.image_url) return null;
 
-  const handleClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!onClick || !imgRef.current) return;
+  const toRelative = (clientX: number, clientY: number) => {
+    if (!imgRef.current) return { x: 0, y: 0 };
     const rect = imgRef.current.getBoundingClientRect();
-    onClick(
-      (e.clientX - rect.left) / rect.width,
-      (e.clientY - rect.top) / rect.height,
-    );
+    return {
+      x: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
+    };
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!onClick || dragging) return;
+    const { x, y } = toRelative(e.clientX, e.clientY);
+    onClick(x, y);
   };
 
   return (
-    <div className="relative inline-block">
+    <div
+      className="relative inline-block select-none"
+      onMouseMove={(e) => {
+        if (!dragging) return;
+        const { x, y } = toRelative(e.clientX, e.clientY);
+        setDragging({ ...dragging, x, y });
+      }}
+      onMouseUp={() => {
+        if (dragging) {
+          onPanoDragEnd?.(dragging.id, dragging.x, dragging.y);
+          setDragging(null);
+        }
+      }}
+      onMouseLeave={() => {
+        if (dragging) {
+          onPanoDragEnd?.(dragging.id, dragging.x, dragging.y);
+          setDragging(null);
+        }
+      }}
+    >
       <img
         ref={imgRef}
         src={`${S3}${floor.image_url}`}
@@ -91,23 +124,35 @@ function FloorPlan({
         draggable={false}
       />
       {/* Existing pano dots */}
-      {panos.map((p) => (
-        <div
-          key={p.id}
-          title={`${p.id.slice(0, 8)} (${p.tile_status})`}
-          className="absolute w-2.5 h-2.5 rounded-full border border-white -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{
-            left: `${p.x * 100}%`,
-            top: `${p.y * 100}%`,
-            background:
-              p.tile_status === "tiled"
-                ? "#6366f1"
-                : p.tile_status === "failed"
-                  ? "#ef4444"
-                  : "#f59e0b",
-          }}
-        />
-      ))}
+      {panos.map((p) => {
+        const isDragging = dragging?.id === p.id;
+        const cx = isDragging ? dragging.x : p.x;
+        const cy = isDragging ? dragging.y : p.y;
+        return (
+          <div
+            key={p.id}
+            title={`${p.id.slice(0, 8)} (${p.tile_status}) — drag to move`}
+            className={`absolute w-2.5 h-2.5 rounded-full border border-white -translate-x-1/2 -translate-y-1/2 ${onPanoDragEnd ? "cursor-move" : "pointer-events-none"} ${isDragging ? "opacity-80 scale-125" : ""}`}
+            style={{
+              left: `${cx * 100}%`,
+              top: `${cy * 100}%`,
+              background:
+                p.tile_status === "tiled"
+                  ? "#6366f1"
+                  : p.tile_status === "failed"
+                    ? "#ef4444"
+                    : "#f59e0b",
+              transition: isDragging ? "none" : undefined,
+            }}
+            onMouseDown={(e) => {
+              if (!onPanoDragEnd) return;
+              e.stopPropagation();
+              e.preventDefault();
+              setDragging({ id: p.id, x: p.x, y: p.y });
+            }}
+          />
+        );
+      })}
       {/* Pending new pano dot */}
       {pendingX !== undefined && pendingY !== undefined && (
         <div
@@ -151,11 +196,12 @@ export default function MapDetail() {
   // Update floor image
   const [updatingFloorId, setUpdatingFloorId] = useState<string | null>(null);
 
-  // Pano upload
+  // Pano upload — batch-aware
   const [selectedFloor, setSelectedFloor] = useState("");
   const [panoPos, setPanoPos] = useState({ x: 0.5, y: 0.5 });
   const [northOffset, setNorthOffset] = useState("0");
-  const [panoFile, setPanoFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchIdx, setBatchIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStep, setUploadStep] = useState<
     "idle" | "uploading" | "tiling" | "done" | "failed"
@@ -163,6 +209,12 @@ export default function MapDetail() {
   const [uploadError, setUploadError] = useState("");
   const [tilingPanoId, setTilingPanoId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Partial panorama / source format
+  const [haov, setHaov] = useState(360);
+  const [vaov, setVaov] = useState(180);
+  const [voffset, setVoffset] = useState(0);
+  const [dualFisheye, setDualFisheye] = useState(false);
 
   // ── data loaders ──────────────────────────────────────────────────────────
 
@@ -273,9 +325,21 @@ export default function MapDetail() {
     }
   };
 
-  const uploadPano = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!panoFile || !selectedFloor) return;
+  const movePano = async (panoId: string, x: number, y: number) => {
+    try {
+      await api.patch(`/admin/panoramas/${panoId}`, { x, y });
+      if (map) loadPanos(map);
+    } catch (err) {
+      alert(apiError(err, "Move failed"));
+    }
+  };
+
+  /** Upload a single panorama file to a given position + floor. */
+  const uploadSingle = async (
+    file: File,
+    pos: { x: number; y: number },
+    floorId: string,
+  ) => {
     setUploading(true);
     setUploadStep("uploading");
     setUploadError("");
@@ -284,17 +348,21 @@ export default function MapDetail() {
         "/admin/panoramas/upload-url",
         {
           params: {
-            floor_id: selectedFloor,
-            x: panoPos.x.toFixed(4),
-            y: panoPos.y.toFixed(4),
+            floor_id: floorId,
+            x: pos.x.toFixed(4),
+            y: pos.y.toFixed(4),
             north_offset: northOffset,
+            haov: dualFisheye ? 360 : haov,
+            vaov: dualFisheye ? 180 : vaov,
+            voffset: dualFisheye ? 0 : voffset,
+            source_format: dualFisheye ? "dual_fisheye" : "equirectangular",
           },
         },
       );
 
       const putRes = await fetch(data.upload_url, {
         method: "PUT",
-        body: panoFile,
+        body: file,
         headers: { "Content-Type": "image/jpeg" },
       });
       if (!putRes.ok) throw new Error(`MinIO PUT failed: ${putRes.status}`);
@@ -303,8 +371,6 @@ export default function MapDetail() {
         pano_id: data.pano_id,
       });
 
-      setPanoFile(null);
-      if (fileRef.current) fileRef.current.value = "";
       setTilingPanoId(data.pano_id);
       setUploadStep("tiling");
       if (map) loadPanos(map);
@@ -334,6 +400,36 @@ export default function MapDetail() {
     }
   };
 
+  /** Form submit handler — used for single-file mode. */
+  const uploadPano = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchFiles.length || !selectedFloor) return;
+    const file = batchFiles[0];
+    await uploadSingle(file, panoPos, selectedFloor);
+    setBatchFiles([]);
+    setBatchIdx(0);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  /** Called when user clicks on the floor plan in the upload section. */
+  const handleUploadMapClick = async (x: number, y: number) => {
+    if (!selectedFloor || uploading) return;
+    setPanoPos({ x, y });
+
+    // In batch mode, auto-upload the current file and advance to the next
+    if (batchFiles.length > 1 && batchIdx < batchFiles.length) {
+      const file = batchFiles[batchIdx];
+      await uploadSingle(file, { x, y }, selectedFloor);
+      const next = batchIdx + 1;
+      setBatchIdx(next);
+      if (next >= batchFiles.length) {
+        setBatchFiles([]);
+        setBatchIdx(0);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    }
+  };
+
   const deletePano = async (panoId: string) => {
     if (!confirm("Delete this panorama?")) return;
     try {
@@ -357,6 +453,9 @@ export default function MapDetail() {
   const activeFloor = map.floors.find((f) => f.id === selectedFloor);
   const panosForFloor = (fid: string) =>
     panos.filter((p) => p.floor_id === fid);
+
+  const isBatch = batchFiles.length > 1;
+  const currentFile = batchFiles[batchIdx] ?? batchFiles[0];
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -491,12 +590,17 @@ export default function MapDetail() {
                   </button>
                 </div>
 
-                {/* floor plan with pano dots */}
+                {/* floor plan with draggable pano dots */}
                 {f.image_url ? (
-                  <FloorPlan floor={f} panos={fp} />
+                  <FloorPlan floor={f} panos={fp} onPanoDragEnd={movePano} />
                 ) : (
                   <p className="text-xs text-gray-600 italic">
                     No floor plan image
+                  </p>
+                )}
+                {fp.length > 0 && (
+                  <p className="text-xs text-gray-600">
+                    Drag dots to reposition panoramas
                   </p>
                 )}
 
@@ -601,6 +705,15 @@ export default function MapDetail() {
               </p>
             )}
 
+            {/* Batch progress indicator */}
+            {isBatch && batchIdx < batchFiles.length && (
+              <p className="text-indigo-400 text-sm">
+                Placing {batchIdx + 1}/{batchFiles.length}:{" "}
+                <span className="font-mono text-xs">{currentFile?.name}</span> —
+                click on the floor plan below
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-400">Floor</label>
@@ -647,13 +760,14 @@ export default function MapDetail() {
                   <FloorPlan
                     floor={activeFloor}
                     panos={panosForFloor(activeFloor.id)}
-                    pendingX={panoPos.x}
-                    pendingY={panoPos.y}
-                    onClick={(x, y) => setPanoPos({ x, y })}
+                    pendingX={!isBatch ? panoPos.x : undefined}
+                    pendingY={!isBatch ? panoPos.y : undefined}
+                    onClick={handleUploadMapClick}
                   />
                   <p className="text-xs text-gray-600 mt-1">
-                    Click floor plan to set position · indigo = existing · green
-                    = new
+                    {isBatch
+                      ? `Click to place file ${batchIdx + 1}/${batchFiles.length} — uploads automatically`
+                      : "Click floor plan to set position · indigo = existing · green = new"}
                   </p>
                 </div>
               ) : (
@@ -687,28 +801,102 @@ export default function MapDetail() {
             <div>
               <label className="text-xs text-gray-400">
                 Equirectangular JPEG
+                {batchFiles.length > 1 && (
+                  <span className="ml-2 text-indigo-400">
+                    {batchFiles.length} files selected
+                  </span>
+                )}
               </label>
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/jpeg"
+                multiple
                 className="mt-1 block text-sm text-gray-300"
-                onChange={(e) => setPanoFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  setBatchFiles(files);
+                  setBatchIdx(0);
+                }}
                 required
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={uploading || !panoFile}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded disabled:opacity-50 transition-colors"
-            >
-              {uploading
-                ? uploadStep === "uploading"
-                  ? "Uploading to MinIO…"
-                  : "Queuing tiling…"
-                : "Upload"}
-            </button>
+            {/* Advanced: partial panorama + dual fisheye */}
+            <details className="text-sm">
+              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">
+                Advanced options
+              </summary>
+              <div className="mt-2 space-y-2">
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dualFisheye}
+                    onChange={(e) => setDualFisheye(e.target.checked)}
+                    className="accent-indigo-500"
+                  />
+                  Dual fisheye (Samsung Gear 360 / SM-C200) — auto-converts to
+                  equirectangular
+                </label>
+                {!dualFisheye && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        {
+                          label: "H-FOV°",
+                          value: haov,
+                          set: setHaov,
+                          min: 1,
+                          max: 360,
+                        },
+                        {
+                          label: "V-FOV°",
+                          value: vaov,
+                          set: setVaov,
+                          min: 1,
+                          max: 180,
+                        },
+                        {
+                          label: "V-Offset°",
+                          value: voffset,
+                          set: setVoffset,
+                          min: -90,
+                          max: 90,
+                        },
+                      ] as const
+                    ).map(({ label, value, set, min, max }) => (
+                      <div key={label}>
+                        <label className="text-xs text-gray-500">{label}</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min={min}
+                          max={max}
+                          value={value}
+                          onChange={(e) => set(Number(e.target.value))}
+                          className="mt-0.5 w-full bg-gray-800 text-white rounded px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+
+            {/* Submit (single-file mode only; batch auto-submits on click) */}
+            {!isBatch && (
+              <button
+                type="submit"
+                disabled={uploading || !batchFiles.length}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded disabled:opacity-50 transition-colors"
+              >
+                {uploading
+                  ? uploadStep === "uploading"
+                    ? "Uploading to MinIO…"
+                    : "Queuing tiling…"
+                  : "Upload"}
+              </button>
+            )}
           </form>
         )}
       </section>
