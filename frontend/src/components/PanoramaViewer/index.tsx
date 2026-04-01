@@ -2,10 +2,14 @@ import { useEffect, useRef } from "react";
 import * as pannellum from "pannellum";
 import "pannellum/build/pannellum.css";
 
-// Vite dev (esbuild) puts the UMD module on .default; Rollup prod synthesizes named exports.
+// Pannellum UMD is bundled as a plain IIFE by esbuild → sets window.pannellum, exports nothing.
+// Rollup prod: viewer is a named export on the namespace → use namespace directly.
+// esbuild dev: viewer is on .default or window.pannellum.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pnl = (
-  (pannellum as any).viewer ? pannellum : (pannellum as any).default
+  (pannellum as any).viewer
+    ? pannellum
+    : ((pannellum as any).default ?? (window as any).pannellum)
 ) as typeof pannellum;
 
 // Pannellum multires tile parameters — must match tiling.py
@@ -40,13 +44,6 @@ export function PanoramaViewer({ panoId }: Props) {
       .catch(() => false)
       .then((hasTiles) => {
         if (cancelled || !containerRef.current) return;
-        console.log(
-          "[PanoramaViewer] hasTiles=%s size=%dx%d pnl.viewer=%s",
-          hasTiles,
-          containerRef.current.clientWidth,
-          containerRef.current.clientHeight,
-          typeof pnl.viewer,
-        );
 
         if (hasTiles) {
           viewerRef.current = pnl.viewer(containerRef.current, {
