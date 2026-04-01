@@ -2,6 +2,12 @@ import { useEffect, useRef } from "react";
 import * as pannellum from "pannellum";
 import "pannellum/build/pannellum.css";
 
+// Vite dev (esbuild) puts the UMD module on .default; Rollup prod synthesizes named exports.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pnl = (
+  (pannellum as any).viewer ? pannellum : (pannellum as any).default
+) as typeof pannellum;
+
 // Pannellum multires tile parameters — must match tiling.py
 const TILE_RESOLUTION = 512;
 const MAX_LEVEL = 4;
@@ -36,7 +42,7 @@ export function PanoramaViewer({ panoId }: Props) {
         if (cancelled || !containerRef.current) return;
 
         if (hasTiles) {
-          viewerRef.current = pannellum.viewer(containerRef.current, {
+          viewerRef.current = pnl.viewer(containerRef.current, {
             type: "multires",
             multiRes: {
               basePath: `${tileBase}`,
@@ -51,7 +57,7 @@ export function PanoramaViewer({ panoId }: Props) {
             compass: false,
           });
         } else {
-          viewerRef.current = pannellum.viewer(containerRef.current, {
+          viewerRef.current = pnl.viewer(containerRef.current, {
             type: "equirectangular",
             panorama: `${s3Url}/gssr-panoramas/raw/${panoId}.jpg`,
             autoLoad: true,
