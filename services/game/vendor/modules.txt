@@ -20,8 +20,8 @@ github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 ## explicit
 github.com/PuerkitoBio/urlesc
-# github.com/andybalholm/brotli v1.1.0
-## explicit; go 1.13
+# github.com/andybalholm/brotli v1.2.0
+## explicit; go 1.22
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
 # github.com/ansrivas/fiberprometheus/v2 v2.6.1
@@ -48,9 +48,6 @@ github.com/dennwc/iters
 # github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
 ## explicit
 github.com/dgryski/go-rendezvous
-# github.com/fasthttp/websocket v1.5.8
-## explicit; go 1.20
-github.com/fasthttp/websocket
 # github.com/frostbyte73/core v0.1.1
 ## explicit; go 1.22.1
 github.com/frostbyte73/core
@@ -86,9 +83,6 @@ github.com/go-openapi/swag
 # github.com/gofiber/adaptor/v2 v2.2.1
 ## explicit; go 1.17
 github.com/gofiber/adaptor/v2
-# github.com/gofiber/contrib/websocket v1.3.4
-## explicit; go 1.18
-github.com/gofiber/contrib/websocket
 # github.com/gofiber/fiber/v2 v2.52.6
 ## explicit; go 1.20
 github.com/gofiber/fiber/v2
@@ -105,8 +99,6 @@ github.com/gofiber/swagger
 # github.com/golang-jwt/jwt/v5 v5.2.1
 ## explicit; go 1.18
 github.com/golang-jwt/jwt/v5
-# github.com/golang/protobuf v1.5.4
-## explicit; go 1.17
 # github.com/google/cel-go v0.25.0
 ## explicit; go 1.22.0
 github.com/google/cel-go/cel
@@ -134,6 +126,12 @@ github.com/google/cel-go/parser/gen
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
+# github.com/gookit/color v1.5.4
+## explicit; go 1.18
+github.com/gookit/color
+# github.com/gorilla/websocket v1.5.3
+## explicit; go 1.12
+github.com/gorilla/websocket
 # github.com/jackc/pgpassfile v1.0.0
 ## explicit; go 1.12
 github.com/jackc/pgpassfile
@@ -165,15 +163,20 @@ github.com/josharian/intern
 github.com/jxskiss/base62
 # github.com/klauspost/compress v1.18.0
 ## explicit; go 1.22
+github.com/klauspost/compress
 github.com/klauspost/compress/flate
+github.com/klauspost/compress/fse
 github.com/klauspost/compress/gzip
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zlib
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/klauspost/cpuid/v2 v2.2.11
 ## explicit; go 1.22
 github.com/klauspost/cpuid/v2
-# github.com/kr/text v0.2.0
-## explicit
 # github.com/lithammer/shortuuid/v4 v4.2.0
 ## explicit; go 1.21
 github.com/lithammer/shortuuid/v4
@@ -215,8 +218,6 @@ github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.16
 ## explicit; go 1.9
 github.com/mattn/go-runewidth
-# github.com/matttproud/golang_protobuf_extensions v1.0.4
-## explicit; go 1.9
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
@@ -362,6 +363,25 @@ github.com/prometheus/procfs/internal/util
 # github.com/puzpuzpuz/xsync/v3 v3.5.1
 ## explicit; go 1.18
 github.com/puzpuzpuz/xsync/v3
+# github.com/quic-go/qpack v0.5.1
+## explicit; go 1.22
+github.com/quic-go/qpack
+# github.com/quic-go/quic-go v0.53.0
+## explicit; go 1.23
+github.com/quic-go/quic-go
+github.com/quic-go/quic-go/http3
+github.com/quic-go/quic-go/internal/ackhandler
+github.com/quic-go/quic-go/internal/congestion
+github.com/quic-go/quic-go/internal/flowcontrol
+github.com/quic-go/quic-go/internal/handshake
+github.com/quic-go/quic-go/internal/protocol
+github.com/quic-go/quic-go/internal/qerr
+github.com/quic-go/quic-go/internal/utils
+github.com/quic-go/quic-go/internal/utils/linkedlist
+github.com/quic-go/quic-go/internal/utils/ringbuffer
+github.com/quic-go/quic-go/internal/wire
+github.com/quic-go/quic-go/logging
+github.com/quic-go/quic-go/quicvarint
 # github.com/redis/go-redis/v9 v9.11.0
 ## explicit; go 1.18
 github.com/redis/go-redis/v9
@@ -376,9 +396,6 @@ github.com/redis/go-redis/v9/internal/util
 # github.com/rivo/uniseg v0.4.4
 ## explicit; go 1.18
 github.com/rivo/uniseg
-# github.com/savsgio/gotils v0.0.0-20240303185622-093b76447511
-## explicit; go 1.20
-github.com/savsgio/gotils/strconv
 # github.com/stoewer/go-strcase v1.3.1
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
@@ -410,12 +427,56 @@ github.com/valyala/fasthttp/stackless
 # github.com/valyala/tcplisten v1.0.0
 ## explicit; go 1.12
 github.com/valyala/tcplisten
+# github.com/vmihailenco/msgpack/v5 v5.4.1
+## explicit; go 1.19
+github.com/vmihailenco/msgpack/v5
+github.com/vmihailenco/msgpack/v5/msgpcode
+# github.com/vmihailenco/tagparser/v2 v2.0.0
+## explicit; go 1.15
+github.com/vmihailenco/tagparser/v2
+github.com/vmihailenco/tagparser/v2/internal
+github.com/vmihailenco/tagparser/v2/internal/parser
 # github.com/wlynxg/anet v0.0.5
 ## explicit; go 1.20
 github.com/wlynxg/anet
+# github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778
+## explicit; go 1.15
+github.com/xo/terminfo
 # github.com/zeebo/xxh3 v1.0.2
 ## explicit; go 1.17
 github.com/zeebo/xxh3
+# github.com/zishang520/engine.io-go-parser v1.3.2
+## explicit; go 1.24.1
+github.com/zishang520/engine.io-go-parser/packet
+github.com/zishang520/engine.io-go-parser/parser
+github.com/zishang520/engine.io-go-parser/types
+github.com/zishang520/engine.io-go-parser/utils
+# github.com/zishang520/engine.io/v2 v2.5.0
+## explicit; go 1.24.1
+github.com/zishang520/engine.io/v2/config
+github.com/zishang520/engine.io/v2/engine
+github.com/zishang520/engine.io/v2/errors
+github.com/zishang520/engine.io/v2/events
+github.com/zishang520/engine.io/v2/log
+github.com/zishang520/engine.io/v2/transports
+github.com/zishang520/engine.io/v2/types
+github.com/zishang520/engine.io/v2/utils
+github.com/zishang520/engine.io/v2/webtransport
+# github.com/zishang520/socket.io-go-parser/v2 v2.5.0
+## explicit; go 1.24.1
+github.com/zishang520/socket.io-go-parser/v2/parser
+# github.com/zishang520/socket.io-go-redis v1.3.0
+## explicit; go 1.24.1
+github.com/zishang520/socket.io-go-redis/adapter
+github.com/zishang520/socket.io-go-redis/emitter
+github.com/zishang520/socket.io-go-redis/types
+# github.com/zishang520/socket.io/v2 v2.5.0
+## explicit; go 1.24.1
+github.com/zishang520/socket.io/v2/adapter
+github.com/zishang520/socket.io/v2/socket
+# github.com/zishang520/webtransport-go v0.9.1
+## explicit; go 1.24.1
+github.com/zishang520/webtransport-go
 # go.opentelemetry.io/otel v1.40.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/otel/attribute
@@ -424,6 +485,10 @@ go.opentelemetry.io/otel/attribute/internal/xxhash
 # go.uber.org/atomic v1.11.0
 ## explicit; go 1.18
 go.uber.org/atomic
+# go.uber.org/mock v0.5.0
+## explicit; go 1.22
+go.uber.org/mock/mockgen
+go.uber.org/mock/mockgen/model
 # go.uber.org/multierr v1.11.0
 ## explicit; go 1.19
 go.uber.org/multierr
@@ -446,9 +511,12 @@ go.uber.org/zap/exp/zapslog
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/blowfish
+golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/curve25519
+golang.org/x/crypto/hkdf
 golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
 golang.org/x/crypto/nacl/box
@@ -460,10 +528,18 @@ golang.org/x/crypto/salsa20/salsa
 golang.org/x/exp/constraints
 golang.org/x/exp/maps
 golang.org/x/exp/slices
+# golang.org/x/mod v0.29.0
+## explicit; go 1.24.0
+golang.org/x/mod/internal/lazyregexp
+golang.org/x/mod/modfile
+golang.org/x/mod/module
+golang.org/x/mod/semver
 # golang.org/x/net v0.47.0
 ## explicit; go 1.24.0
 golang.org/x/net/bpf
 golang.org/x/net/dns/dnsmessage
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
@@ -505,9 +581,32 @@ golang.org/x/text/width
 # golang.org/x/tools v0.38.0
 ## explicit; go 1.24.0
 golang.org/x/tools/go/ast/astutil
+golang.org/x/tools/go/ast/edge
+golang.org/x/tools/go/ast/inspector
 golang.org/x/tools/go/buildutil
+golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/cgo
 golang.org/x/tools/go/loader
+golang.org/x/tools/go/packages
+golang.org/x/tools/go/types/objectpath
+golang.org/x/tools/go/types/typeutil
+golang.org/x/tools/imports
+golang.org/x/tools/internal/aliases
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/gcimporter
+golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/gopathwalk
+golang.org/x/tools/internal/imports
+golang.org/x/tools/internal/modindex
+golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/pkgbits
+golang.org/x/tools/internal/stdlib
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
+golang.org/x/tools/internal/versions
 # google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217
 ## explicit; go 1.24.0
 google.golang.org/genproto/googleapis/api/expr/v1alpha1

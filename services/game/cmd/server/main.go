@@ -14,12 +14,13 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	fiberprometheus "github.com/ansrivas/fiberprometheus/v2"
-	fiberws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -34,7 +35,9 @@ import (
 	"github.com/gssr/game/internal/room"
 	"github.com/gssr/game/internal/solo"
 	"github.com/gssr/game/internal/user"
-	"github.com/gssr/game/internal/ws"
+	sioadapter "github.com/zishang520/socket.io-go-redis/adapter"
+	siotypes "github.com/zishang520/socket.io-go-redis/types"
+	sio "github.com/zishang520/socket.io/v2/socket"
 )
 
 func main() {
@@ -58,7 +61,18 @@ func main() {
 		log.Printf("admin seed warning: %v", err)
 	}
 
-	hub := ws.NewHub()
+	// Socket.io server (runs on a separate port via net/http).
+	// Fiber uses fasthttp which does not implement http.Hijacker, so socket.io
+	// cannot share the Fiber listener; it gets its own net/http server on SocketPort.
+	ioServer := sio.NewServer(nil, nil)
+
+	// Valkey pub/sub adapter — makes socket.io broadcasts work across all nodes.
+	// Each node publishes to Valkey; every other node receives and forwards to
+	// its locally connected clients. Zynq nodes already connect to the main PC's
+	// Valkey via ZYNQ_VALKEY_URL, so this works across the whole cluster.
+	ioServer.SetAdapter(&sioadapter.RedisAdapterBuilder{
+		Redis: siotypes.NewRedisClient(ctx, valkey.Client),
+	})
 
 	app := fiber.New(fiber.Config{
 		AppName: "gssr-game",
@@ -125,7 +139,8 @@ func main() {
 
 	// Rooms + game flow (all auth-required)
 	roomStore := room.NewStore(valkey)
-	roomHandler := room.NewHandler(cfg, pg, roomStore, hub)
+	roomHandler := room.NewHandler(cfg, pg, roomStore, ioServer)
+	roomHandler.SetupSocketIO(cfg.JWTSecret)
 	rooms := api.Group("/rooms", auth.Required(cfg.JWTSecret))
 	rooms.Post("", roomHandler.Create)
 	rooms.Get("/:id", roomHandler.Get)
@@ -150,14 +165,18 @@ func main() {
 	soloGroup.Get("/:id/result", soloHandler.Result)
 	soloGroup.Post("/:id/abandon", soloHandler.Abandon)
 
-	// WebSocket: run auth middleware first, then upgrade
-	app.Use("/ws/rooms/:id", auth.Required(cfg.JWTSecret), func(c *fiber.Ctx) error {
-		if fiberws.IsWebSocketUpgrade(c) {
-			return c.Next()
+	// Start socket.io on a dedicated net/http server (separate from Fiber/fasthttp).
+	go func() {
+		srv := &http.Server{
+			Addr:              ":" + cfg.SocketPort,
+			Handler:           ioServer.ServeHandler(nil),
+			ReadHeaderTimeout: 10 * time.Second,
 		}
-		return fiber.ErrUpgradeRequired
-	})
-	app.Get("/ws/rooms/:id", fiberws.New(roomHandler.WsRoom))
+		log.Printf("socket.io listening on :%s", cfg.SocketPort)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("socket.io server: %v", err)
+		}
+	}()
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

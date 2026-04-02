@@ -26,12 +26,190 @@ definitions:
     type: object
   auth.registerRequest:
     properties:
+      email:
+        example: alice@example.com
+        type: string
       password:
         example: s3cr3tP@ss
         type: string
       username:
         example: alice
         type: string
+    type: object
+  maps.floorItem:
+    properties:
+      floor_number:
+        type: integer
+      id:
+        type: string
+      image_url:
+        type: string
+      label:
+        type: string
+      pano_count:
+        type: integer
+    type: object
+  maps.mapDetail:
+    properties:
+      coord_type:
+        type: string
+      description:
+        type: string
+      floors:
+        items:
+          $ref: '#/definitions/maps.floorItem'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      x_max:
+        type: number
+      x_min:
+        type: number
+      y_max:
+        type: number
+      y_min:
+        type: number
+    type: object
+  maps.mapItem:
+    properties:
+      coord_type:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      x_max:
+        type: number
+      x_min:
+        type: number
+      y_max:
+        type: number
+      y_min:
+        type: number
+    type: object
+  room.Guess:
+    properties:
+      floor_id:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  room.Player:
+    properties:
+      elo:
+        type: integer
+      has_guessed:
+        type: boolean
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  room.RoomState:
+    properties:
+      current_pano_id:
+        type: string
+      current_round:
+        type: integer
+      guesses:
+        additionalProperties:
+          $ref: '#/definitions/room.Guess'
+        description: Guesses maps userID → guess for the current round.
+        type: object
+      host_id:
+        type: string
+      id:
+        type: string
+      map_id:
+        type: string
+      match_id:
+        type: string
+      max_players:
+        type: integer
+      pano_ids:
+        items:
+          type: string
+        type: array
+      players:
+        items:
+          $ref: '#/definitions/room.Player'
+        type: array
+      round_token:
+        description: RoundToken is regenerated each round to prevent double-advance
+          races.
+        type: string
+      rounds:
+        type: integer
+      status:
+        description: waiting|active|finished
+        type: string
+      time_limit_sec:
+        type: integer
+    type: object
+  room.createRoomReq:
+    properties:
+      map_id:
+        type: string
+      max_players:
+        type: integer
+      rounds:
+        type: integer
+      time_limit_sec:
+        type: integer
+    type: object
+  room.guessReq:
+    properties:
+      floor_id:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  solo.guessReq:
+    properties:
+      floor_id:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  solo.startReq:
+    properties:
+      difficulty:
+        type: string
+      map_id:
+        type: string
+      rounds:
+        type: integer
+    type: object
+  user.userResponse:
+    properties:
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      elo:
+        type: integer
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: string
+      is_admin:
+        type: boolean
+      username:
+        type: string
+      xp:
+        type: integer
     type: object
 host: localhost:3000
 info:
@@ -40,6 +218,35 @@ info:
   title: GSSR Game API
   version: "1.0"
 paths:
+  /auth/admin-login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: Authenticate as admin and receive tokens as cookies
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:
@@ -66,7 +273,7 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/auth.errorResponse'
-      summary: Authenticate and receive tokens as cookies
+      summary: Authenticate as regular user and receive tokens as cookies
       tags:
       - auth
   /auth/logout:
@@ -127,9 +334,432 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/auth.errorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
       summary: Register a new user
       tags:
       - auth
+  /auth/verify-email:
+    get:
+      parameters:
+      - description: Verification token
+        in: query
+        name: token
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: Verify email address via token link
+      tags:
+      - auth
+  /leaderboard:
+    get:
+      parameters:
+      - description: 'elo or xp (default: elo)'
+        in: query
+        name: type
+        type: string
+      - description: 'page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+      summary: Leaderboard (ELO or XP)
+      tags:
+      - leaderboard
+  /maps:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/maps.mapItem'
+            type: array
+      summary: List all maps
+      tags:
+      - maps
+  /maps/{id}:
+    get:
+      parameters:
+      - description: Map UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/maps.mapDetail'
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      summary: Get map with floors and panorama counts
+      tags:
+      - maps
+  /rooms:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Room settings
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/room.createRoomReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Create a new room
+      tags:
+      - rooms
+  /rooms/{id}:
+    get:
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/room.RoomState'
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Get room state
+      tags:
+      - rooms
+  /rooms/{id}/guess:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Guess coordinates
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/room.guessReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Submit a guess for the current round
+      tags:
+      - rooms
+  /rooms/{id}/join:
+    post:
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Join a room
+      tags:
+      - rooms
+  /rooms/{id}/leave:
+    delete:
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Leave a room
+      tags:
+      - rooms
+  /rooms/{id}/livekit-token:
+    get:
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Get a LiveKit room token
+      tags:
+      - rooms
+  /rooms/{id}/start:
+    post:
+      parameters:
+      - description: Room ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Start the game (host only)
+      tags:
+      - rooms
+  /solo/{id}:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Get current state of a solo session
+      tags:
+      - solo
+  /solo/{id}/abandon:
+    post:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Abandon a solo session
+      tags:
+      - solo
+  /solo/{id}/guess:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Guess coordinates (normalized 0-1)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/solo.guessReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Submit a guess for the current solo round
+      tags:
+      - solo
+  /solo/{id}/result:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Get full result of a finished solo session
+      tags:
+      - solo
+  /solo/history:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+      security:
+      - CookieAuth: []
+      summary: List solo session history for the current user
+      tags:
+      - solo
+  /solo/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Map, difficulty, rounds
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/solo.startReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Start a solo session
+      tags:
+      - solo
+  /users/{id}/profile:
+    get:
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: object
+      summary: Get a user's public profile
+      tags:
+      - users
+  /users/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.userResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Get current user profile
+      tags:
+      - users
 schemes:
 - http
 securityDefinitions:

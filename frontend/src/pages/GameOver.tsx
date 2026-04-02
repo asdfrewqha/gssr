@@ -4,19 +4,13 @@ import { useGameStore } from "../store/gameStore";
 export default function GameOver() {
   const navigate = useNavigate();
   const players = useGameStore((s) => s.players);
-  const roundResults = useGameStore((s) => s.roundResults);
+  const finalScores = useGameStore((s) => s.finalScores);
   const reset = useGameStore((s) => s.reset);
 
-  // Aggregate total score per player across all rounds
-  const totals = players
-    .map((p) => ({
-      userId: p.userId,
-      username: p.username,
-      elo: p.elo,
-      total: roundResults
-        .filter((r) => r.userId === p.userId)
-        .reduce((sum, r) => sum + r.score, 0),
-    }))
+  // Use server-authoritative final scores; fall back to player list if missing.
+  const eloMap = Object.fromEntries(players.map((p) => [p.userId, p.elo]));
+  const totals = (finalScores ?? [])
+    .map((f) => ({ ...f, elo: eloMap[f.userId] ?? 0 }))
     .sort((a, b) => b.total - a.total);
 
   const medals = ["🥇", "🥈", "🥉"];

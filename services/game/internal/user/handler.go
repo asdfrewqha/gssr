@@ -34,7 +34,7 @@ type userResponse struct {
 // @Produce      json
 // @Security     CookieAuth
 // @Success      200  {object}  userResponse
-// @Failure      401  {object}  fiber.Map
+// @Failure      401  {object} object
 // @Router       /users/me [get]
 func (h *Handler) GetMe(c *fiber.Ctx) error {
 	userID := auth.UserID(c)

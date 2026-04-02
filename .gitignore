@@ -11,6 +11,10 @@ infra/compose/.env
 # LiveKit config — written by CI deploy script, contains API keys
 infra/compose/livekit.yaml
 
+# HTTP Basic Auth for /utils/ admin routes — generated from ADMIN_USERNAME/ADMIN_PASSWORD
+# echo "$ADMIN_USERNAME:$(openssl passwd -apr1 "$ADMIN_PASSWORD")" > infra/nginx/utils.htpasswd
+infra/nginx/utils.htpasswd
+
 # Go
 services/game/dist/
 services/game/coverage.out

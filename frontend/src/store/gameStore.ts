@@ -21,6 +21,12 @@ export interface RoundResult {
   distance: number;
 }
 
+export interface FinalScore {
+  userId: string;
+  username: string;
+  total: number;
+}
+
 export interface Guess {
   x: number;
   y: number;
@@ -39,6 +45,7 @@ interface GameState {
   roundResults: RoundResult[];
   timeLimitSec: number;
   correctLocation: { x: number; y: number; floorId: string } | null;
+  finalScores: FinalScore[] | null;
 
   setRoom: (roomId: string, mapId: string) => void;
   setStatus: (status: GameStatus) => void;
@@ -52,6 +59,7 @@ interface GameState {
     results: RoundResult[],
     correct: GameState["correctLocation"],
   ) => void;
+  setFinalScores: (scores: FinalScore[]) => void;
   reset: () => void;
 }
 
@@ -67,6 +75,7 @@ export const useGameStore = create<GameState>((set) => ({
   roundResults: [],
   timeLimitSec: 60,
   correctLocation: null,
+  finalScores: null,
 
   setRoom: (roomId, mapId) => set({ roomId, mapId }),
   setStatus: (status) => set({ status }),
@@ -91,6 +100,7 @@ export const useGameStore = create<GameState>((set) => ({
   setMyGuess: (guess) => set({ myGuess: guess }),
   setRoundResults: (roundResults, correctLocation) =>
     set({ roundResults, correctLocation, status: "round_results" }),
+  setFinalScores: (finalScores) => set({ finalScores, status: "game_over" }),
   reset: () =>
     set({
       roomId: null,
@@ -101,5 +111,6 @@ export const useGameStore = create<GameState>((set) => ({
       currentPanoId: null,
       myGuess: null,
       roundResults: [],
+      finalScores: null,
     }),
 }));

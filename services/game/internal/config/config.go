@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	Port          string
+	SocketPort    string
 	PostgresURL   string
 	ValkeyURL     string
 	JWTSecret     []byte
@@ -27,6 +28,7 @@ func Load() *Config {
 
 	return &Config{
 		Port:        getEnv("PORT", "3000"),
+		SocketPort:  getEnv("SOCKET_PORT", "3001"),
 		PostgresURL: mustEnv("POSTGRES_URL"),
 		ValkeyURL:     mustEnv("VALKEY_URL"),
 		JWTSecret:     []byte(mustEnv("JWT_SECRET")),

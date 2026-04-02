@@ -70,7 +70,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 // @Produce      json
 // @Param        id   path      string  true  "Map UUID"
 // @Success      200  {object}  mapDetail
-// @Failure      404  {object}  fiber.Map
+// @Failure      404  {object} object
 // @Router       /maps/{id} [get]
 func (h *Handler) Get(c *fiber.Ctx) error {
 	id := c.Params("id")

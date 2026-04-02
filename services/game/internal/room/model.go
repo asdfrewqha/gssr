@@ -20,6 +20,21 @@ type RoomState struct {
 	MatchID       string           `json:"match_id,omitempty"`
 }
 
+// RoomView is the public representation of a room sent to clients.
+// Internal fields (guesses, round_token, pano_ids, match_id, current_pano_id)
+// are omitted to prevent data leaks between players.
+type RoomView struct {
+	ID           string   `json:"id"`
+	HostID       string   `json:"host_id"`
+	MapID        string   `json:"map_id"`
+	Players      []Player `json:"players"`
+	Status       string   `json:"status"`
+	MaxPlayers   int      `json:"max_players"`
+	Rounds       int      `json:"rounds"`
+	TimeLimitSec int      `json:"time_limit_sec"`
+	CurrentRound int      `json:"current_round"`
+}
+
 type Player struct {
 	UserID     string `json:"user_id"`
 	Username   string `json:"username"`

@@ -64,6 +64,16 @@ type startReq struct {
 	Difficulty string `json:"difficulty"`
 }
 
+// Start godoc
+// @Summary      Start a solo session
+// @Tags         solo
+// @Accept       json
+// @Produce      json
+// @Security     CookieAuth
+// @Param        body  body  startReq  true  "Map, difficulty, rounds"
+// @Success      201   {object} object
+// @Failure      400   {object} object
+// @Router       /solo/start [post]
 func (h *Handler) Start(c *fiber.Ctx) error {
 	var req startReq
 	if err := c.BodyParser(&req); err != nil {
@@ -160,6 +170,15 @@ func (h *Handler) Start(c *fiber.Ctx) error {
 // GET /api/solo/:id
 // ──────────────────────────────────────────────
 
+// GetSession godoc
+// @Summary      Get current state of a solo session
+// @Tags         solo
+// @Produce      json
+// @Security     CookieAuth
+// @Param        id   path  string  true  "Session ID"
+// @Success      200  {object} object
+// @Failure      404  {object} object
+// @Router       /solo/{id} [get]
 func (h *Handler) GetSession(c *fiber.Ctx) error {
 	userID := gauth.UserID(c)
 	sessionID := c.Params("id")
@@ -194,6 +213,17 @@ type guessReq struct {
 	FloorID string  `json:"floor_id"`
 }
 
+// Guess godoc
+// @Summary      Submit a guess for the current solo round
+// @Tags         solo
+// @Accept       json
+// @Produce      json
+// @Security     CookieAuth
+// @Param        id    path  string    true  "Session ID"
+// @Param        body  body  guessReq  true  "Guess coordinates (normalized 0-1)"
+// @Success      200   {object} object
+// @Failure      404   {object} object
+// @Router       /solo/{id}/guess [post]
 func (h *Handler) Guess(c *fiber.Ctx) error {
 	userID := gauth.UserID(c)
 	sessionID := c.Params("id")
@@ -325,6 +355,15 @@ func (h *Handler) Guess(c *fiber.Ctx) error {
 // POST /api/solo/:id/abandon
 // ──────────────────────────────────────────────
 
+// Abandon godoc
+// @Summary      Abandon a solo session
+// @Tags         solo
+// @Produce      json
+// @Security     CookieAuth
+// @Param        id  path  string  true  "Session ID"
+// @Success      200 {object} object
+// @Failure      404 {object} object
+// @Router       /solo/{id}/abandon [post]
 func (h *Handler) Abandon(c *fiber.Ctx) error {
 	userID := gauth.UserID(c)
 	sessionID := c.Params("id")
@@ -348,6 +387,13 @@ func (h *Handler) Abandon(c *fiber.Ctx) error {
 // GET /api/solo/history
 // ──────────────────────────────────────────────
 
+// History godoc
+// @Summary      List solo session history for the current user
+// @Tags         solo
+// @Produce      json
+// @Security     CookieAuth
+// @Success      200  {array}   object
+// @Router       /solo/history [get]
 func (h *Handler) History(c *fiber.Ctx) error {
 	userID := gauth.UserID(c)
 
@@ -404,6 +450,15 @@ func (h *Handler) History(c *fiber.Ctx) error {
 // GET /api/solo/:id/result  — full result of a finished session
 // ──────────────────────────────────────────────
 
+// Result godoc
+// @Summary      Get full result of a finished solo session
+// @Tags         solo
+// @Produce      json
+// @Security     CookieAuth
+// @Param        id  path  string  true  "Session ID"
+// @Success      200 {object} object
+// @Failure      404 {object} object
+// @Router       /solo/{id}/result [get]
 func (h *Handler) Result(c *fiber.Ctx) error {
 	userID := gauth.UserID(c)
 	sessionID := c.Params("id")

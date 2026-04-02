@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import client from "../api/client";
 import { useGameStore } from "../store/gameStore";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useSocket } from "../hooks/useSocket";
 
 interface RoomApiPlayer {
   user_id: string;
@@ -18,6 +18,7 @@ interface RoomApiData {
   players: RoomApiPlayer[];
   status: string;
   rounds: number;
+  max_players: number;
   time_limit_sec: number;
 }
 
@@ -30,7 +31,7 @@ export default function Room() {
   const setRoom = useGameStore((s) => s.setRoom);
   const setPlayers = useGameStore((s) => s.setPlayers);
 
-  useWebSocket(roomId ?? null);
+  useSocket(roomId ?? null);
 
   const [roomData, setRoomData] = useState<RoomApiData | null>(null);
   const [myUserId, setMyUserId] = useState("");
@@ -143,7 +144,7 @@ export default function Room() {
         <div className="bg-gray-800 rounded-xl p-4">
           <p className="text-gray-400 text-sm">
             {roomData.rounds} rounds · {roomData.time_limit_sec}s each · up to{" "}
-            {players.length}/{roomData.rounds} players
+            {players.length}/{roomData.max_players} players
           </p>
         </div>
 

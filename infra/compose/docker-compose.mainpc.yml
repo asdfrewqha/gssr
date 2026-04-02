@@ -19,7 +19,7 @@ services:
   valkey:
     image: valkey/valkey:7-alpine
     restart: unless-stopped
-    command: valkey-server --save 60 1 --loglevel warning
+    command: valkey-server --save 60 1 --appendonly yes --loglevel warning
     volumes:
       - valkey_data:/data
 
@@ -32,6 +32,7 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
       - ../rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ../rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
       - "127.0.0.1:15672:15672"
 
@@ -73,6 +74,9 @@ services:
   workers:
     image: ${DOCKERHUB_USERNAME}/gssr-workers:latest
     restart: unless-stopped
+    # --root-path tells FastAPI its public URL prefix so swagger-ui fetches
+    # openapi.json from the correct path (https://api.${DOMAIN}/utils/workers/openapi.json).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --root-path /utils/workers
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +127,10 @@ services:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/upstream.conf:/etc/nginx/conf.d/upstream.conf:ro
       - ../nginx/proxy_params.conf:/etc/nginx/conf.d/proxy_params.conf:ro
+      # Generated during deploy from ADMIN_USERNAME / ADMIN_PASSWORD:
+      #   echo "$ADMIN_USERNAME:$(openssl passwd -apr1 "$ADMIN_PASSWORD")" \
+      #     > infra/nginx/utils.htpasswd
+      - ../nginx/utils.htpasswd:/etc/nginx/conf.d/utils.htpasswd:ro
       - letsencrypt:/etc/letsencrypt:ro
     ports:
       - "80:80"
@@ -153,6 +161,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_LISTEN_PORT: 5050
       PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+      SCRIPT_NAME: /utils/pgadmin
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ../pgadmin/servers.json:/pgadmin4/servers.json:ro
@@ -165,6 +174,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     restart: unless-stopped
+    command: --base-url=/utils/portainer
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -188,7 +198,8 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_SERVER_ROOT_URL: https://api.${DOMAIN}/utils/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana

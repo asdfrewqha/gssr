@@ -24,7 +24,7 @@ func NewHandler(pg *db.Postgres) *Handler {
 // @Produce      json
 // @Param        type  query  string  false  "elo or xp (default: elo)"
 // @Param        page  query  int     false  "page number (default: 1)"
-// @Success      200  {array}  fiber.Map
+// @Success      200  {array} object
 // @Router       /leaderboard [get]
 func (h *Handler) List(c *fiber.Ctx) error {
 	lbType := c.Query("type", "elo")
@@ -90,8 +90,8 @@ func (h *Handler) List(c *fiber.Ctx) error {
 // @Tags         users
 // @Produce      json
 // @Param        id  path  string  true  "User ID"
-// @Success      200  {object}  fiber.Map
-// @Failure      404  {object}  fiber.Map
+// @Success      200  {object} object
+// @Failure      404  {object} object
 // @Router       /users/{id}/profile [get]
 func (h *Handler) Profile(c *fiber.Ctx) error {
 	id := c.Params("id")

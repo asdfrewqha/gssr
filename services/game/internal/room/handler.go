@@ -6,29 +6,87 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
-	fiberws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	lkauth "github.com/livekit/protocol/auth"
+	sio "github.com/zishang520/socket.io/v2/socket"
 
 	gauth "github.com/gssr/game/internal/auth"
 	"github.com/gssr/game/internal/config"
 	"github.com/gssr/game/internal/db"
 	"github.com/gssr/game/internal/game"
-	"github.com/gssr/game/internal/ws"
 )
 
 type Handler struct {
 	cfg   *config.Config
 	pg    *db.Postgres
 	store *Store
-	hub   *ws.Hub
+	io    *sio.Server
 }
 
-func NewHandler(cfg *config.Config, pg *db.Postgres, store *Store, hub *ws.Hub) *Handler {
-	return &Handler{cfg: cfg, pg: pg, store: store, hub: hub}
+func NewHandler(cfg *config.Config, pg *db.Postgres, store *Store, io *sio.Server) *Handler {
+	return &Handler{cfg: cfg, pg: pg, store: store, io: io}
+}
+
+// cookieFromHeaders extracts a named cookie value from a socket.io Handshake.Headers map.
+// Headers is map[string][]string populated from net/http (canonical keys, e.g. "Cookie").
+func cookieFromHeaders(headers map[string][]string, name string) string {
+	// net/http uses canonical "Cookie"; try both to be safe.
+	for _, key := range []string{"Cookie", "cookie"} {
+		for _, line := range headers[key] {
+			for _, part := range strings.Split(line, ";") {
+				part = strings.TrimSpace(part)
+				k, v, ok := strings.Cut(part, "=")
+				if ok && k == name {
+					return v
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// SetupSocketIO registers socket.io middleware (auth) and connection handler.
+// Call this once after creating the Handler.
+func (h *Handler) SetupSocketIO(secret []byte) {
+	// Auth middleware: validate JWT from cookie before accepting connection.
+	h.io.Use(func(socket *sio.Socket, next func(*sio.ExtendedError)) {
+		headers := socket.Handshake().Headers
+		token := cookieFromHeaders(headers, "access_token")
+		if token == "" {
+			token = cookieFromHeaders(headers, "admin_token")
+		}
+		if _, err := gauth.Verify(secret, token); err != nil {
+			next(sio.NewExtendedError("unauthorized", nil))
+			return
+		}
+		next(nil)
+	})
+
+	_ = h.io.On("connection", func(clients ...any) {
+		socket := clients[0].(*sio.Socket)
+
+		// Extract roomId from auth object sent by client: io(url, { auth: { roomId } })
+		var roomID string
+		if authMap, ok := socket.Handshake().Auth.(map[string]interface{}); ok {
+			roomID, _ = authMap["roomId"].(string)
+		}
+		if roomID == "" {
+			socket.Disconnect(true)
+			return
+		}
+
+		socket.Join(sio.Room(roomID))
+
+		// BUG FIX: do NOT remove player from Valkey room state on WS disconnect.
+		// Room membership is managed exclusively via REST:
+		//   POST /api/rooms/:id/join   – add player
+		//   DELETE /api/rooms/:id/leave – remove player
+		_ = socket.On("disconnect", func(...any) {})
+	})
 }
 
 // ──────────────────────────────────────────────
@@ -49,7 +107,7 @@ type createRoomReq struct {
 // @Produce      json
 // @Security     CookieAuth
 // @Param        body  body      createRoomReq  true  "Room settings"
-// @Success      201   {object}  fiber.Map
+// @Success      201   {object} object
 // @Router       /rooms [post]
 func (h *Handler) Create(c *fiber.Ctx) error {
 	var req createRoomReq
@@ -105,14 +163,24 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 // @Security     CookieAuth
 // @Param        id  path  string  true  "Room ID"
 // @Success      200 {object} RoomState
-// @Failure      404 {object} fiber.Map
+// @Failure      404 {object} object
 // @Router       /rooms/{id} [get]
 func (h *Handler) Get(c *fiber.Ctx) error {
 	state, err := h.store.Get(c.Context(), c.Params("id"))
 	if err != nil || state == nil {
 		return fiber.ErrNotFound
 	}
-	return c.JSON(state)
+	return c.JSON(RoomView{
+		ID:           state.ID,
+		HostID:       state.HostID,
+		MapID:        state.MapID,
+		Players:      state.Players,
+		Status:       state.Status,
+		MaxPlayers:   state.MaxPlayers,
+		Rounds:       state.Rounds,
+		TimeLimitSec: state.TimeLimitSec,
+		CurrentRound: state.CurrentRound,
+	})
 }
 
 // ──────────────────────────────────────────────
@@ -125,7 +193,7 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 // @Produce      json
 // @Security     CookieAuth
 // @Param        id  path  string  true  "Room ID"
-// @Success      200 {object} fiber.Map
+// @Success      200 {object} object
 // @Router       /rooms/{id}/join [post]
 func (h *Handler) Join(c *fiber.Ctx) error {
 	roomID := c.Params("id")
@@ -163,9 +231,10 @@ func (h *Handler) Join(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	h.hub.Broadcast(roomID, ws.Message{
-		Event:   "player_joined",
-		Payload: mustMarshal(map[string]any{"user_id": p.UserID, "username": p.Username, "elo": p.ELO}),
+	_ = h.io.To(sio.Room(roomID)).Emit("player_joined", map[string]any{
+		"user_id":  p.UserID,
+		"username": p.Username,
+		"elo":      p.ELO,
 	})
 	return c.JSON(fiber.Map{"id": roomID, "map_id": state.MapID, "rounds": state.Rounds})
 }
@@ -180,7 +249,7 @@ func (h *Handler) Join(c *fiber.Ctx) error {
 // @Produce      json
 // @Security     CookieAuth
 // @Param        id  path  string  true  "Room ID"
-// @Success      200 {object} fiber.Map
+// @Success      200 {object} object
 // @Router       /rooms/{id}/leave [delete]
 func (h *Handler) Leave(c *fiber.Ctx) error {
 	roomID := c.Params("id")
@@ -212,10 +281,7 @@ func (h *Handler) Leave(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	h.hub.Broadcast(roomID, ws.Message{
-		Event:   "player_left",
-		Payload: mustMarshal(map[string]any{"user_id": userID}),
-	})
+	_ = h.io.To(sio.Room(roomID)).Emit("player_left", map[string]any{"user_id": userID})
 	return c.JSON(fiber.Map{"ok": true})
 }
 
@@ -229,7 +295,7 @@ func (h *Handler) Leave(c *fiber.Ctx) error {
 // @Produce      json
 // @Security     CookieAuth
 // @Param        id  path  string  true  "Room ID"
-// @Success      200 {object} fiber.Map
+// @Success      200 {object} object
 // @Router       /rooms/{id}/start [post]
 func (h *Handler) Start(c *fiber.Ctx) error {
 	roomID := c.Params("id")
@@ -305,13 +371,10 @@ func (h *Handler) Start(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	h.hub.Broadcast(roomID, ws.Message{
-		Event: "round_started",
-		Payload: mustMarshal(map[string]any{
-			"round":          state.CurrentRound,
-			"pano_id":        state.CurrentPanoID,
-			"time_limit_sec": state.TimeLimitSec,
-		}),
+	_ = h.io.To(sio.Room(roomID)).Emit("round_started", map[string]any{
+		"round":          state.CurrentRound,
+		"pano_id":        state.CurrentPanoID,
+		"time_limit_sec": state.TimeLimitSec,
 	})
 	h.startRoundTimer(roomID, state.RoundToken, time.Duration(state.TimeLimitSec)*time.Second)
 	return c.JSON(fiber.Map{"ok": true, "match_id": matchID})
@@ -335,7 +398,7 @@ type guessReq struct {
 // @Security     CookieAuth
 // @Param        id    path  string    true  "Room ID"
 // @Param        body  body  guessReq  true  "Guess coordinates"
-// @Success      200 {object} fiber.Map
+// @Success      200 {object} object
 // @Router       /rooms/{id}/guess [post]
 func (h *Handler) Guess(c *fiber.Ctx) error {
 	roomID := c.Params("id")
@@ -384,12 +447,9 @@ func (h *Handler) Guess(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	h.hub.Broadcast(roomID, ws.Message{
-		Event: "guess_broadcast",
-		Payload: mustMarshal(map[string]any{
-			"user_id":  userID,
-			"username": playerName,
-		}),
+	_ = h.io.To(sio.Room(roomID)).Emit("guess_broadcast", map[string]any{
+		"user_id":  userID,
+		"username": playerName,
 	})
 
 	// Check if all players have guessed
@@ -488,17 +548,14 @@ func (h *Handler) advanceRound(ctx context.Context, state *RoomState) {
 	}
 
 	// Broadcast round results
-	h.hub.Broadcast(roomID, ws.Message{
-		Event: "round_ended",
-		Payload: mustMarshal(map[string]any{
-			"round":  state.CurrentRound,
-			"scores": scores,
-			"correct": map[string]any{
-				"x":        ax,
-				"y":        ay,
-				"floor_id": aFloorID,
-			},
-		}),
+	_ = h.io.To(sio.Room(roomID)).Emit("round_ended", map[string]any{
+		"round":  state.CurrentRound,
+		"scores": scores,
+		"correct": map[string]any{
+			"x":        ax,
+			"y":        ay,
+			"floor_id": aFloorID,
+		},
 	})
 
 	// Reset guesses for next round
@@ -512,13 +569,10 @@ func (h *Handler) advanceRound(ctx context.Context, state *RoomState) {
 		state.CurrentPanoID = state.PanoIDs[state.CurrentRound-1]
 		state.RoundToken = uuid.NewString()
 		_ = h.store.Set(ctx, state)
-		h.hub.Broadcast(roomID, ws.Message{
-			Event: "round_started",
-			Payload: mustMarshal(map[string]any{
-				"round":          state.CurrentRound,
-				"pano_id":        state.CurrentPanoID,
-				"time_limit_sec": state.TimeLimitSec,
-			}),
+		_ = h.io.To(sio.Room(roomID)).Emit("round_started", map[string]any{
+			"round":          state.CurrentRound,
+			"pano_id":        state.CurrentPanoID,
+			"time_limit_sec": state.TimeLimitSec,
 		})
 		h.startRoundTimer(roomID, state.RoundToken, time.Duration(state.TimeLimitSec)*time.Second)
 	} else {
@@ -556,10 +610,7 @@ func (h *Handler) advanceRound(ctx context.Context, state *RoomState) {
 			}
 		}
 
-		h.hub.Broadcast(roomID, ws.Message{
-			Event:   "game_ended",
-			Payload: mustMarshal(map[string]any{"scores": finals}),
-		})
+		_ = h.io.To(sio.Room(roomID)).Emit("game_ended", map[string]any{"scores": finals})
 
 		// Trigger ELO recalculation in workers service
 		go h.triggerELO(state.MatchID)
@@ -597,7 +648,7 @@ func (h *Handler) triggerELO(matchID string) {
 // @Produce      json
 // @Security     CookieAuth
 // @Param        id  path  string  true  "Room ID"
-// @Success      200 {object} fiber.Map
+// @Success      200 {object} object
 // @Router       /rooms/{id}/livekit-token [get]
 func (h *Handler) LiveKitToken(c *fiber.Ctx) error {
 	roomID := c.Params("id")
@@ -627,85 +678,4 @@ func (h *Handler) LiveKitToken(c *fiber.Ctx) error {
 		"token": token,
 		"url":   h.cfg.LiveKitURL,
 	})
-}
-
-// ──────────────────────────────────────────────
-// GET /ws/rooms/:id  (WebSocket)
-// ──────────────────────────────────────────────
-
-// WsRoom upgrades the connection to WebSocket and streams game events.
-func (h *Handler) WsRoom(conn *fiberws.Conn) {
-	roomID := conn.Params("id")
-	rawID, _ := conn.Locals("userID").(interface{ String() string })
-	if rawID == nil {
-		conn.Close()
-		return
-	}
-	userID := rawID.String()
-
-	client := &ws.Client{
-		RoomID: roomID,
-		Send:   make(chan []byte, 64),
-	}
-	if id, err := uuid.Parse(userID); err == nil {
-		client.UserID = id
-	}
-
-	h.hub.Register(roomID, client)
-	defer func() {
-		h.hub.Unregister(roomID, client)
-		// Gracefully remove player from room on disconnect
-		if state, err := h.store.Get(context.Background(), roomID); err == nil && state != nil {
-			remaining := state.Players[:0]
-			for _, p := range state.Players {
-				if p.UserID != userID {
-					remaining = append(remaining, p)
-				}
-			}
-			if len(remaining) != len(state.Players) {
-				state.Players = remaining
-				if state.HostID == userID && len(remaining) > 0 {
-					state.HostID = remaining[0].UserID
-				}
-				if len(remaining) == 0 {
-					_ = h.store.Delete(context.Background(), roomID)
-				} else {
-					_ = h.store.Set(context.Background(), state)
-					h.hub.Broadcast(roomID, ws.Message{
-						Event:   "player_left",
-						Payload: mustMarshal(map[string]any{"user_id": userID}),
-					})
-				}
-			}
-		}
-	}()
-
-	// Write pump (send messages to client)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for msg := range client.Send {
-			if err := conn.WriteMessage(fiberws.TextMessage, msg); err != nil {
-				return
-			}
-		}
-	}()
-
-	// Read pump (receive messages from client — currently unused but keeps connection alive)
-	for {
-		_, _, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-	}
-	<-done
-}
-
-// ──────────────────────────────────────────────
-// helpers
-// ──────────────────────────────────────────────
-
-func mustMarshal(v any) json.RawMessage {
-	b, _ := json.Marshal(v)
-	return json.RawMessage(b)
 }

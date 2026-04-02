@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import client from "../api/client";
 import { useGameStore } from "../store/gameStore";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useSocket } from "../hooks/useSocket";
 import { PanoramaViewer } from "../components/PanoramaViewer";
 import { GuessMap } from "../components/GuessMap";
 import { FloorSelector } from "../components/FloorSelector";
@@ -29,7 +29,7 @@ export default function Game() {
   const correctLocation = useGameStore((s) => s.correctLocation);
   const setMyGuess = useGameStore((s) => s.setMyGuess);
 
-  useWebSocket(roomId ?? null);
+  useSocket(roomId ?? null);
 
   const [showMap, setShowMap] = useState(false);
   const [floors, setFloors] = useState<Floor[]>([]);
