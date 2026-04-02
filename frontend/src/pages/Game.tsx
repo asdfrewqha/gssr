@@ -28,8 +28,50 @@ export default function Game() {
   const totalRounds = useGameStore((s) => s.totalRounds);
   const correctLocation = useGameStore((s) => s.correctLocation);
   const setMyGuess = useGameStore((s) => s.setMyGuess);
+  const setRoom = useGameStore((s) => s.setRoom);
+  const setPlayers = useGameStore((s) => s.setPlayers);
 
   useSocket(roomId ?? null);
+
+  // On page refresh the Zustand store is empty. Restore room state from the
+  // API so the socket can rejoin and receive the next round_started event.
+  useEffect(() => {
+    if (currentPanoId || !roomId) return;
+    client
+      .get<{
+        id: string;
+        map_id: string;
+        status: string;
+        rounds: number;
+        players: {
+          user_id: string;
+          username: string;
+          elo: number;
+          has_guessed: boolean;
+        }[];
+      }>(`/api/rooms/${roomId}`)
+      .then(({ data: r }) => {
+        if (r.status === "finished") {
+          navigate(`/room/${roomId}/over`, { replace: true });
+          return;
+        }
+        if (r.status !== "active") {
+          navigate(`/room/${roomId}`, { replace: true });
+          return;
+        }
+        setRoom(r.id, r.map_id);
+        useGameStore.setState({ totalRounds: r.rounds });
+        setPlayers(
+          r.players.map((p) => ({
+            userId: p.user_id,
+            username: p.username,
+            elo: p.elo,
+            hasGuessed: p.has_guessed,
+          })),
+        );
+      })
+      .catch(() => navigate("/", { replace: true }));
+  }, [roomId, currentPanoId, setRoom, setPlayers, navigate]);
 
   const [showMap, setShowMap] = useState(false);
   const [floors, setFloors] = useState<Floor[]>([]);
@@ -104,8 +146,11 @@ export default function Game() {
 
   if (!currentPanoId)
     return (
-      <div className="w-screen h-screen bg-black flex items-center justify-center text-white">
-        Loading…
+      <div className="w-screen h-screen bg-black flex flex-col items-center justify-center text-white gap-3">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm">
+          Reconnecting… waiting for next round
+        </p>
       </div>
     );
 
